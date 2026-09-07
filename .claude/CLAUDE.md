@@ -150,4 +150,14 @@ Two related rules:
   they stay readable offline. `apps/web/tools/precache-guard.ts` enforces both
   directions.
 
+## Repo commands
+
+`.claude/commands/` is tracked in git — unlike `.claude/skills/`, which is gitignored
+and absent from a fresh clone — so these are available to everyone:
+
+- `/review-pr [n]` — read-only review of an open PR: what's new, UI/UX gaps, KISS.
+  Writes a plan; never edits code or posts to GitHub.
+
+Built-in commands that pair with it: `/run`, `/code-review`, `/simplify`.
+
 Current project status/roadmap: see `docs/ROADMAP.md`.
