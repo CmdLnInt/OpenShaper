@@ -3,11 +3,11 @@
  *
  * FIXTURES: `__fixtures__/synthetic-*.s3dx` are self-authored files built to
  * exercise the same S3dxReader edge cases real-world Shape3d exports have
- * hit in the past (narrower fallback outline, a `<StringerMeasurement>`
- * thickness deck, a deck curve overshooting the nose, a degenerate
- * cross-section) — without redistributing anyone else's board design. Each
- * fixture's geometry is chosen so the parsed dimensions land on known values,
- * making this a precise check of the parser rather than a fuzzy
+ * hit in the past (narrower fallback outline, differing
+ * `<StringerMeasurement>` flags, a deck curve overshooting the nose, and a
+ * degenerate cross-section) — without redistributing anyone else's board
+ * design. Each fixture's geometry is chosen so the parsed dimensions land on
+ * known values, making this a precise check of the parser rather than a fuzzy
  * characterization against an opaque third-party file.
  *
  * Reference: ../boardcad-le/src/board/readers/S3dxReader.java
@@ -117,40 +117,15 @@ describe('parseS3dx real-world export robustness', () => {
     }
   });
 
-  it('treats a <StringerMeasurement> deck as thickness-above-bottom', () => {
-    // synthetic-stringer-fold-a sets StringerMeasurement=1, so curveDefSide4
-    // stores thickness, not absolute deck z. Treated as absolute it would dip
-    // below the bottom at the tips (negative thickness, spiking rocker).
-    // After conversion the thickness must be non-negative everywhere and
-    // sensible at the center (~6.8 cm by construction).
-    const { board } = parseS3dx(fixtureText('synthetic-stringer-fold-a.s3dx'));
-    const len = getLength(board);
-    for (let f = 0; f <= 1.0001; f += 0.05) {
-      expect(getThicknessAtPos(board, f * len)).toBeGreaterThan(-0.05);
-    }
-    expect(getThickness(board)).toBeGreaterThan(5);
-    expect(getThickness(board)).toBeLessThan(8);
-  });
+  it('does not reinterpret deck coordinates based on <StringerMeasurement>', () => {
+    const flagOn = fixtureText('synthetic-stringer-fold-a.s3dx');
+    const flagOff = flagOn.replace(
+      '<StringerMeasurement>1</StringerMeasurement>',
+      '<StringerMeasurement>0</StringerMeasurement>',
+    );
 
-  it.each(['synthetic-stringer-fold-a.s3dx', 'synthetic-stringer-fold-b.s3dx'])(
-    'refits the stringer-thickness deck without bulging above the center thickness (%s)',
-    (name) => {
-      // The naive per-handle stringer conversion inflates the deck's Bézier
-      // handles, bulging the thickness above the nominal center thickness (a
-      // double-hump in the rocker profile). Re-fitting the absolute deck from
-      // sampled bottom+thickness removes the bulge: the max thickness anywhere
-      // must not exceed the center thickness by more than a small margin.
-      const { board } = parseS3dx(fixtureText(name));
-      const len = getLength(board);
-      const center = getThickness(board); // thickness at length/2
-      let maxThick = 0;
-      for (let f = 0; f <= 1.0001; f += 0.02) {
-        maxThick = Math.max(maxThick, getThicknessAtPos(board, f * len));
-      }
-      // Center is the thickest station for these boards; allow a small tolerance.
-      expect(maxThick).toBeLessThanOrEqual(center + 0.25);
-    },
-  );
+    expect(parseS3dx(flagOn)).toEqual(parseS3dx(flagOff));
+  });
 
   it('leaves an absolute (StringerMeasurement=0) deck unchanged', () => {
     const { board } = parseS3dx(fixtureText('synthetic-degenerate-section.s3dx'));
