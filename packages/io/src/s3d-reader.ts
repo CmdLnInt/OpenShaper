@@ -35,13 +35,16 @@
  */
 
 import {
+  bestFit,
   board,
   crossSection,
   knot,
   splineFromKnots,
+  valueAt,
   type BezierBoard,
   type CrossSection,
   type Knot,
+  type Vec2,
 } from '@openshaper/kernel';
 import { vec2 } from '@openshaper/kernel';
 import type { ImportWarning } from './import-warning';
@@ -482,6 +485,154 @@ const zeroDummyKnot = (): Knot => knot(vec2(0, 0), vec2(0, 0), vec2(0, 0), true,
 // store's junction layer (clampMonotonicX) on load. No-op for well-formed files.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Deck coordinate representation: absolute z vs thickness-above-bottom
+//
+// Shape3d stores the deck curve (curveDefSide4) in one of two representations,
+// and which one it used depends on the WRITER VERSION, not on any flag in the
+// file:
+//
+//   9.1.1.0  + <StringerMeasurement>1  -> curve holds THICKNESS above the bottom
+//   9.1.1.2 and later                  -> curve always holds ABSOLUTE deck z
+//
+// <StringerMeasurement> looks like the discriminator but is not: it is the
+// dimension-measurement setting, and 9.1.1.2+ files ship it set while still
+// writing an absolute deck. Keying off it mis-reads one group or the other
+// (verified across eight producer files; see docs/specs/divergences.md).
+//
+// So detect the representation GEOMETRICALLY instead, which is self-validating
+// and needs no version table to maintain as Shape3d keeps shipping: read the
+// curve as absolute and measure deck(x) - bottom(x). A board whose deck passes
+// BELOW its own bottom is not a board — the only reading under which such a
+// file is a solid is thickness-above-bottom, so that is what it must hold.
+//
+// The two groups separate by a wide margin, so the threshold is not delicate:
+// genuinely-absolute files bottom out at +0.41 cm (thinnest measured tip) while
+// thickness-holding files read as absolute reach -8.74 cm. Anything in between
+// classifies both groups correctly.
+// ---------------------------------------------------------------------------
+
+/**
+ * How far (cm) the deck may dip below the bottom before the curve is taken to
+ * hold thickness rather than absolute z. Small and negative: a legitimately
+ * absolute deck meets the bottom at a knife-thin tip and may cross zero by a
+ * hair through end-cap interpolation, which must NOT trigger the conversion.
+ */
+const DECK_ABSOLUTE_MIN_THICKNESS = -0.2;
+
+/** Stations sampled along the board when classifying the deck representation. */
+const DECK_PROBE_SAMPLES = 64;
+
+/**
+ * True when `deckKnots` holds thickness-above-bottom rather than absolute deck
+ * z — i.e. reading it as absolute would put the deck under the bottom.
+ */
+const deckHoldsThickness = (
+  deckKnots: Knot[],
+  bottom: ReturnType<typeof splineFromKnots>,
+  length: number,
+): boolean => {
+  if (deckKnots.length < 2 || length <= 0) return false;
+
+  const deck = splineFromKnots(deckKnots);
+  const deckMinX = deckKnots[0]!.end.x;
+  const deckMaxX = deckKnots[deckKnots.length - 1]!.end.x;
+  const clamp = (x: number, lo: number, hi: number) => Math.min(Math.max(x, lo), hi);
+
+  for (let i = 0; i <= DECK_PROBE_SAMPLES; i++) {
+    const x = (length * i) / DECK_PROBE_SAMPLES;
+    const deckZ = valueAt(deck, clamp(x, deckMinX, deckMaxX));
+    const bottomZ = valueAt(bottom, clamp(x, 0, length));
+    if (deckZ - bottomZ < DECK_ABSOLUTE_MIN_THICKNESS) return true;
+  }
+  return false;
+};
+
+// ---------------------------------------------------------------------------
+// Thickness -> absolute deck conversion
+//
+// The absolute deck is the function  deck(x) = bottom(x) + thickness(x). Adding
+// the bottom-rocker VALUE to each Bézier tangent handle independently (the naive
+// transform) is wrong: a handle is a control point, not a point on the curve, so
+// inflating its y by the rocker height swings the handle and makes the deck
+// bulge between knots (a visible double-hump in the rocker profile). Instead we
+// sample the true deck(x) within each source segment and re-fit a cubic with the
+// kernel's least-squares `bestFit`, keeping the file's knot stations but deriving
+// handles from the real curve. The two outer handles are reflected to give a
+// smooth tip cap.
+// ---------------------------------------------------------------------------
+
+/** Samples per source deck segment when re-fitting the absolute deck curve. */
+const DECK_REFIT_SAMPLES = 16;
+
+const reflectHandle = (end: Vec2, opposite: Vec2): Vec2 =>
+  vec2(2 * end.x - opposite.x, 2 * end.y - opposite.y);
+
+const thicknessToAbsoluteDeck = (
+  deckKnots: Knot[],
+  bottom: ReturnType<typeof splineFromKnots>,
+  length: number,
+): Knot[] => {
+  const clampBottom = (x: number) => Math.min(Math.max(x, 0), length);
+  const rockerAt = (x: number) => valueAt(bottom, clampBottom(x));
+
+  // Degenerate (<2 knots): no segment to fit — shift the lone endpoint only.
+  if (deckKnots.length < 2) {
+    return deckKnots.map((k) => {
+      const dy = rockerAt(k.end.x);
+      return knot(
+        vec2(k.end.x, k.end.y + dy),
+        vec2(k.tangentToPrev.x, k.tangentToPrev.y + dy),
+        vec2(k.tangentToNext.x, k.tangentToNext.y + dy),
+        k.continuous,
+        k.other,
+      );
+    });
+  }
+
+  const thickness = splineFromKnots(deckKnots);
+  const thickMinX = deckKnots[0]!.end.x;
+  const thickMaxX = deckKnots[deckKnots.length - 1]!.end.x;
+  const clampThick = (x: number) => Math.min(Math.max(x, thickMinX), thickMaxX);
+  const deckAbsAt = (x: number) => valueAt(thickness, clampThick(x)) + rockerAt(x);
+
+  // Per-segment cubic fit → handles that follow the true bottom+thickness curve.
+  const startHandle: Vec2[] = []; // outgoing handle of knot i (segment i)
+  const endHandle: Vec2[] = []; //   incoming handle of knot i+1 (segment i)
+  for (let i = 0; i < deckKnots.length - 1; i++) {
+    const x0 = deckKnots[i]!.end.x;
+    const x1 = deckKnots[i + 1]!.end.x;
+    if (Math.abs(x1 - x0) < 1e-6) {
+      // Coincident-x knots (e.g. a tip cap): no width to fit — collapse handles
+      // onto the endpoints so the near-vertical segment is preserved.
+      startHandle[i] = vec2(x0, deckAbsAt(x0));
+      endHandle[i] = vec2(x1, deckAbsAt(x1));
+      continue;
+    }
+    const pts: Vec2[] = [];
+    for (let s = 0; s <= DECK_REFIT_SAMPLES; s++) {
+      const x = x0 + ((x1 - x0) * s) / DECK_REFIT_SAMPLES;
+      pts.push(vec2(x, deckAbsAt(x)));
+    }
+    const [, c1, c2] = bestFit(pts);
+    startHandle[i] = c1;
+    endHandle[i] = c2;
+  }
+
+  return deckKnots.map((k, i) => {
+    const end = vec2(k.end.x, deckAbsAt(k.end.x));
+    const tn = i === deckKnots.length - 1 ? null : startHandle[i]!;
+    const tp = i === 0 ? null : endHandle[i - 1]!;
+    return knot(
+      end,
+      tp ?? reflectHandle(end, tn!),
+      tn ?? reflectHandle(end, tp!),
+      k.continuous,
+      k.other,
+    );
+  });
+};
+
 const clampCurveMonotonicX = (knots: Knot[], length: number): Knot[] => {
   const clampX = (v: number) => Math.min(Math.max(v, 0), length);
   let prevX = 0;
@@ -629,9 +780,21 @@ const parseShape3d = (text: string, opts: Shape3dOptions): ParsedS3d => {
     if (!deckBezierXml) {
       throw new S3dParseError(`<${opts.deckTag}> (deck) has no <Bezier3d> child`);
     }
-    const rawDeckKnots = readBezierKnots(deckBezierXml, PLANE_XZ);
+    let rawDeckKnots = readBezierKnots(deckBezierXml, PLANE_XZ);
     if (rawDeckKnots.length < 1) {
       throw new S3dParseError('Deck Bezier3d has no knots');
+    }
+    // Older writers store thickness-above-bottom here; detect and convert.
+    const bottomSpline = splineFromKnots(bottomKnots);
+    if (deckHoldsThickness(rawDeckKnots, bottomSpline, length)) {
+      rawDeckKnots = thicknessToAbsoluteDeck(rawDeckKnots, bottomSpline, length);
+      warnings.push({
+        severity: 'info',
+        message:
+          'The deck curve holds thickness above the bottom, not absolute height ' +
+          '(older Shape3d writer) — converted to an absolute deck so the board is ' +
+          'not self-intersecting at the nose and tail',
+      });
     }
     // Inject bottom endpoints (S3dReader.java lines 117–125)
     deckKnots = injectDeckEndpoints(rawDeckKnots, bottomKnots);
