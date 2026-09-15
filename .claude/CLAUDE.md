@@ -105,23 +105,6 @@ CI runs `pnpm typecheck`, `pnpm test`, and `pnpm build` after
   `pnpm exec prettier --write <files>` for specific files, or `pnpm format` for the
   whole repository.
 
-## Efficient implementation
-
-- Start by identifying the smallest affected package, entry point, and existing
-  test. Trace the call path before broadening the search.
-- Reuse existing helpers and patterns; search before adding a utility, abstraction,
-  dependency, or parallel implementation.
-- Keep edits surgical. Do not refactor adjacent code, rename unrelated symbols, or
-  rewrite whole files unless it directly reduces risk or duplication.
-- Use the smallest relevant test command first. Escalate to typecheck, build, or
-  E2E only when the changed surface warrants it or a targeted check exposes an
-  integration issue.
-- Keep tool output bounded (`--stat`, `--name-only`, focused selectors, or a
-  limited result count). Do not paste or summarize unchanged files in the final
-  response.
-- Stop investigating once the requirement is understood, implemented, and covered
-  by the relevant verification. Do not pursue speculative improvements.
-
 ## Change and verification workflow
 
 - Inspect the relevant package, tests, and existing patterns before editing; keep
