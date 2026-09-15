@@ -3,11 +3,11 @@
  *
  * FIXTURES: `__fixtures__/synthetic-*.s3dx` are self-authored files built to
  * exercise the same S3dxReader edge cases real-world Shape3d exports have
- * hit in the past (narrower fallback outline, a `<StringerMeasurement>`
- * thickness deck, a deck curve overshooting the nose, a degenerate
- * cross-section) — without redistributing anyone else's board design. Each
- * fixture's geometry is chosen so the parsed dimensions land on known values,
- * making this a precise check of the parser rather than a fuzzy
+ * hit in the past (narrower fallback outline, both deck coordinate
+ * representations on a rockered board, a deck curve overshooting the nose,
+ * and a degenerate cross-section) — without redistributing anyone else's
+ * board design. Each fixture's geometry is chosen so the parsed dimensions land on
+ * known values, making this a precise check of the parser rather than a fuzzy
  * characterization against an opaque third-party file.
  *
  * Reference: ../boardcad-le/src/board/readers/S3dxReader.java
@@ -117,38 +117,63 @@ describe('parseS3dx real-world export robustness', () => {
     }
   });
 
-  it('treats a <StringerMeasurement> deck as thickness-above-bottom', () => {
-    // synthetic-stringer-fold-a sets StringerMeasurement=1, so curveDefSide4
-    // stores thickness, not absolute deck z. Treated as absolute it would dip
-    // below the bottom at the tips (negative thickness, spiking rocker).
-    // After conversion the thickness must be non-negative everywhere and
-    // sensible at the center (~6.8 cm by construction).
-    const { board } = parseS3dx(fixtureText('synthetic-stringer-fold-a.s3dx'));
+  // -------------------------------------------------------------------------
+  // Deck coordinate representation (absolute z vs thickness-above-bottom).
+  //
+  // Both fixtures below carry <StringerMeasurement>1 and the SAME 8 cm tip
+  // rocker, and differ only in how the deck curve is stored. That is the whole
+  // point: the flag cannot tell them apart, so the reader must classify them
+  // from the geometry. Keying off the flag breaks exactly one of the two, and
+  // which one depends on which way the flag is read — so both directions are
+  // pinned here.
+  //
+  // A zero-rocker fixture cannot pin either direction: where bottom(x) = 0 the
+  // two representations are the same numbers.
+  // -------------------------------------------------------------------------
+
+  it('converts a thickness-above-bottom deck to an absolute deck', () => {
+    // Read as absolute this deck sits 7.5 cm BELOW the bottom at the tips —
+    // a self-intersecting board, so the curve must hold thickness.
+    const { board, warnings } = parseS3dx(fixtureText('synthetic-rocker-thickness-deck.s3dx'));
     const len = getLength(board);
-    for (let f = 0; f <= 1.0001; f += 0.05) {
+
+    for (let f = 0; f <= 1.0001; f += 0.02) {
       expect(getThicknessAtPos(board, f * len)).toBeGreaterThan(-0.05);
     }
-    expect(getThickness(board)).toBeGreaterThan(5);
-    expect(getThickness(board)).toBeLessThan(8);
+    expect(getThickness(board)).toBeCloseTo(6.5, 0);
+    expect(warnings.some((w) => /thickness above the bottom/i.test(w.message))).toBe(true);
   });
 
-  it.each(['synthetic-stringer-fold-a.s3dx', 'synthetic-stringer-fold-b.s3dx'])(
-    'refits the stringer-thickness deck without bulging above the center thickness (%s)',
+  it('leaves an absolute deck alone even when <StringerMeasurement> is set', () => {
+    // Same flag, same rocker, deck already absolute. Converting it would add
+    // the 8 cm tip rocker a second time and inflate the board into a slab.
+    const { board, warnings } = parseS3dx(fixtureText('synthetic-rocker-absolute-deck.s3dx'));
+    const len = getLength(board);
+
+    expect(getThickness(board)).toBeCloseTo(6.5, 0);
+    // The double-add would push max thickness to ~14.5 cm.
+    let maxThick = 0;
+    for (let f = 0; f <= 1.0001; f += 0.02) {
+      maxThick = Math.max(maxThick, getThicknessAtPos(board, f * len));
+    }
+    expect(maxThick).toBeLessThan(7.5);
+    // Tips stay thin rather than being lifted clear of the bottom.
+    expect(getThicknessAtPos(board, 0)).toBeLessThan(1.5);
+    expect(warnings.some((w) => /thickness above the bottom/i.test(w.message))).toBe(false);
+  });
+
+  it.each(['synthetic-rocker-thickness-deck.s3dx', 'synthetic-rocker-absolute-deck.s3dx'])(
+    'ignores the <StringerMeasurement> flag itself (%s)',
     (name) => {
-      // The naive per-handle stringer conversion inflates the deck's Bézier
-      // handles, bulging the thickness above the nominal center thickness (a
-      // double-hump in the rocker profile). Re-fitting the absolute deck from
-      // sampled bottom+thickness removes the bulge: the max thickness anywhere
-      // must not exceed the center thickness by more than a small margin.
-      const { board } = parseS3dx(fixtureText(name));
-      const len = getLength(board);
-      const center = getThickness(board); // thickness at length/2
-      let maxThick = 0;
-      for (let f = 0; f <= 1.0001; f += 0.02) {
-        maxThick = Math.max(maxThick, getThicknessAtPos(board, f * len));
-      }
-      // Center is the thickest station for these boards; allow a small tolerance.
-      expect(maxThick).toBeLessThanOrEqual(center + 0.25);
+      // The flag is Shape3d's dimension-measurement setting, not a coordinate
+      // declaration: flipping it must not change the parsed board.
+      const flagOn = fixtureText(name);
+      const flagOff = flagOn.replace(
+        '<StringerMeasurement>1</StringerMeasurement>',
+        '<StringerMeasurement>0</StringerMeasurement>',
+      );
+      expect(flagOff).not.toEqual(flagOn); // the replace actually fired
+      expect(parseS3dx(flagOn)).toEqual(parseS3dx(flagOff));
     },
   );
 
