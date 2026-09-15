@@ -11,9 +11,8 @@ code, post to GitHub, commit, or push. If the user wants any of that, they will 
 
 ## 1. Pick the PR
 
-`$1` if given. Otherwise list the open PRs (`mcp__github__list_pull_requests`, state `open`)
-and take the only one. If there is more than one, print the list and stop — never guess which
-one was meant.
+`$1` if given. Otherwise `gh pr list --state open` and take the only one. If there is more
+than one, print the list and stop — never guess which one was meant.
 
 ## 2. Read the diff locally, not through the API
 
@@ -23,12 +22,12 @@ git diff --stat main...pr-<N>
 git diff main...pr-<N> -- <paths>
 ```
 
-`pull_request_read` with `get_files` blows past the tool-result limit on any real PR (66k
-characters for a 24-file one), and the `pull/<N>/head` ref works even when the PR's head lives
-on a fork — which contributor PRs here do. Fetch the ref; read the diff in slices.
+Any whole-PR diff dump blows past the tool-result limit on a real PR (66k characters for a
+24-file one), and the `pull/<N>/head` ref works even when the PR's head lives on a fork —
+which contributor PRs here do. Fetch the ref; read the diff in slices.
 
-Then read the PR body for the author's own account of the change, and `git log main..pr-<N>`
-for how it was built.
+Then `gh pr view <N>` for the author's own account of the change, and `git log main..pr-<N>`
+for how it was built. `gh` is authenticated; there is no GitHub MCP server in this repo.
 
 ## 3. Ground the review before judging it
 
@@ -45,6 +44,10 @@ The written rules with teeth:
 - **Golden-pinned geometry.** Kernel changes match `docs/specs/golden/` within a stated
   tolerance. A tolerance is never loosened to make a change pass; a deliberate divergence is
   recorded in `docs/specs/divergences.md`.
+- **A test that cannot fail is not coverage.** For every test the PR adds, ask what edit to
+  the source would turn it red. If the answer is "none", say so — an assertion that holds by
+  construction, or a fixture too degenerate to exercise the branch, passes CI while the bug
+  ships. Check the fixtures too, not just the assertions.
 - **Edits are pure functions** in `packages/store/src/edits.ts`, landed through
   `commit(next, label)` so undo works — not command classes, not direct mutation.
 - **Display units** (`apps/web/CLAUDE.md`). No literal `mm`/`cm`/`in` in JSX, no `.toFixed()`
