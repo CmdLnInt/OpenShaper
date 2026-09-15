@@ -28,7 +28,7 @@ import { getConsent } from './consent';
 
 /**
  * `cookieless_mode` ships in posthog-js's runtime but is missing from the
- * public `PostHogConfig` type as of 1.404.1 (the type only references it from a
+ * public `PostHogConfig` type as of 1.433.4 (the type only references it from a
  * doc comment on `opt_out_capturing_by_default`), so it has to be attached
  * outside the checked object literal. Drop this once the type catches up.
  *
