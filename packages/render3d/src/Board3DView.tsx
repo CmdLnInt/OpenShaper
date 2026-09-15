@@ -352,6 +352,7 @@ export function Board3DView({
           makeDefault
           enableDamping
           dampingFactor={0.1}
+          zoomToCursor
           target={initialCamera?.target}
           onChange={
             onCameraChange
