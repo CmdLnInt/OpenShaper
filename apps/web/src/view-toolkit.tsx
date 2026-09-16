@@ -37,6 +37,21 @@ import {
 export type EditorKind = 'outline' | 'rocker' | 'crossSection';
 export type View = 'quad' | EditorKind | '3d';
 
+/**
+ * Whether a view is offered at the current layout tier.
+ *
+ * Quad stacks its four panes into a scrolling column below `lg`. On a phone that
+ * is ~1200px of scroll inside a ~740px viewport, and because every canvas sets
+ * `touch-action: none` the column can only be scrolled from the gaps between
+ * panes and the pane headers — so most of it is unreachable by the gesture a
+ * phone user would naturally try. Phones get the single views instead.
+ */
+export const isViewAvailable = (view: View, isPhone: boolean): boolean =>
+  !(isPhone && view === 'quad');
+
+/** Where a phone lands when the view it would otherwise restore is unavailable. */
+export const FALLBACK_VIEW: View = 'outline';
+
 // Re-export 3D settings so existing importers from view-toolkit keep working
 export { faceSizeFor } from './view3d-settings';
 export type { MeshQuality, View3DSettings } from './view3d-settings';

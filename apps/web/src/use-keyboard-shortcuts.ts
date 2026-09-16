@@ -21,7 +21,8 @@ export function useKeyboardShortcuts({
   onCommandPalette,
   clearSectionFocus,
 }: {
-  setView: Dispatch<SetStateAction<View>>;
+  /** Switching is gated by layout tier, so this is the app's `selectView`, not a raw setter. */
+  setView: (view: View) => void;
   setCsIndex: Dispatch<SetStateAction<number>>;
   metaRef: MutableRefObject<BoardMeta>;
   /** Ctrl/Cmd+K. Pass a stable callback — the listener re-binds when it changes. */
