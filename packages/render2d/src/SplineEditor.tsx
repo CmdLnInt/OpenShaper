@@ -40,7 +40,7 @@ import {
   type SectionHandle,
   type SectionMarker,
 } from './draw';
-import { hitTest, type Hit } from './hit';
+import { handlePoint, hitTest, type Hit } from './hit';
 import { boundsOf, sampleSpline } from './sample';
 import {
   fitToBounds,
@@ -184,10 +184,13 @@ export interface SplineEditorProps {
 }
 
 type DragState =
-  | { mode: 'edit'; target: SplineTarget; hit: Hit }
-  | { mode: 'section'; index: number; started: boolean; handle: SectionHandle }
+  // `grab` is the vector from the pointer to the thing it grabbed, held for the
+  // life of the drag so the thing tracks the pointer's *movement* instead of
+  // teleporting to sit under it. See GRAB_OFFSET below.
+  | { mode: 'edit'; target: SplineTarget; hit: Hit; grab: Vec2 }
+  | { mode: 'section'; index: number; started: boolean; handle: SectionHandle; grab: number }
   // Dragging a fin to re-place it (plan pane).
-  | { mode: 'fin'; index: number }
+  | { mode: 'fin'; index: number; grab: Vec2 }
   // Middle-button / Space+left pan.
   | { mode: 'pan'; lastX: number; lastY: number }
   // Right button: a tap opens the context menu, a drag pans (tracked via `moved`).
@@ -228,6 +231,16 @@ const TRACE_HANDLE_OFFSET = 28;
 const TRACE_HANDLE_R = 9;
 
 /** Max pointer travel (px) for a right-button press+release to count as a tap, not a pan. */
+/**
+ * Hit radius for a control-point handle, in CSS px. A fingertip is both blunter
+ * and less precisely reported than a mouse cursor, so touch gets a target it can
+ * actually land on. This is safe to widen only because a drag preserves the grab
+ * offset (see GRAB_OFFSET): grabbing a handle from 14px away moves it by what the
+ * finger moves, it does not yank it 14px sideways first.
+ */
+const HIT_TOL_PX = 8;
+const TOUCH_HIT_TOL_PX = 14;
+
 const TAP_SLOP = 4;
 
 /** Hold time (ms) for a single-finger touch to open the context menu (right-click stand-in). */
@@ -715,14 +728,17 @@ export function SplineEditor({
 
   // Nearest control-point handle under a screen point, across all target splines.
   const hitAny = useCallback(
-    (p: { x: number; y: number }): { target: SplineTarget; hit: Hit } | null => {
+    (
+      p: { x: number; y: number },
+      tolPx = HIT_TOL_PX,
+    ): { target: SplineTarget; hit: Hit } | null => {
       if (!vp || !board) return null;
       for (const t of targets) {
         const preferred =
           selection && sameTarget(selection.target, t)
             ? { index: selection.index, kind: selection.kind ?? ('end' as const) }
             : undefined;
-        const hit = hitTest(getTargetSpline(board, t), vp, p, 8, preferred);
+        const hit = hitTest(getTargetSpline(board, t), vp, p, tolPx, preferred);
         if (hit) return { target: t, hit };
       }
       return null;
@@ -749,6 +765,7 @@ export function SplineEditor({
       if (!vp || !board) return;
       setMenu(null);
       const p = localPoint(e);
+      const touch = e.pointerType === 'touch';
       // Pin the mapping for whatever gesture this press starts.
       gestureRect.current = canvasRef.current!.getBoundingClientRect();
 
@@ -769,7 +786,7 @@ export function SplineEditor({
 
       // Touch: track the pointer and route multi-touch / long-press gestures. A single
       // finger then falls through to the normal left-button select/edit path below.
-      if (e.pointerType === 'touch') {
+      if (touch) {
         pointers.current.set(e.pointerId, p);
         if (pointers.current.size === 2) {
           // Second finger: abandon any in-progress one-finger edit and start a pinch.
@@ -869,6 +886,7 @@ export function SplineEditor({
             index: marker.index,
             started: false,
             handle: p.y < size.h / 2 ? 'top' : 'bottom',
+            grab: marker.pos - screenToWorld(vp, p).x,
           };
           setCursor('ew-resize');
           return;
@@ -878,13 +896,28 @@ export function SplineEditor({
         return;
       }
       onFocusSection?.(null);
-      const picked = hitAny(p);
+      const picked = hitAny(p, touch ? TOUCH_HIT_TOL_PX : HIT_TOL_PX);
       if (picked) {
         store
           .getState()
           .select({ target: picked.target, index: picked.hit.index, kind: picked.hit.kind });
         store.getState().beginEdit();
-        drag.current = { mode: 'edit', target: picked.target, hit: picked.hit };
+        // GRAB_OFFSET: remember where the handle sits relative to the pointer, and
+        // move it by the pointer's delta for the rest of the drag. Assigning the
+        // pointer's own position instead snapped the handle under the cursor on the
+        // first move — up to the hit radius in one frame, which is most of a phone's
+        // board width. That snap is what made mobile edits jump.
+        const handle = handlePoint(
+          getTargetSpline(board, picked.target).knots[picked.hit.index]!,
+          picked.hit.kind,
+        );
+        const at = screenToWorld(vp, p);
+        drag.current = {
+          mode: 'edit',
+          target: picked.target,
+          hit: picked.hit,
+          grab: { x: handle.x - at.x, y: handle.y - at.y },
+        };
         return;
       }
       // Interactive trace image (after control points so curve edits still win): grab the
@@ -913,11 +946,19 @@ export function SplineEditor({
       }
       // A fin (plan pane) takes the click after control points: select + start dragging.
       if (overlays?.fins && overlays.finView !== 'profile') {
-        const finIndex = hitFin(overlays.fins, vp, p);
+        const finIndex = hitFin(overlays.fins, vp, p, touch ? TOUCH_HIT_TOL_PX : HIT_TOL_PX);
         if (finIndex !== null) {
           store.getState().selectFin(finIndex);
           store.getState().beginEdit('Move fin');
-          drag.current = { mode: 'fin', index: finIndex };
+          // `moveFin` reads the point as the fin's base centre, so that midpoint is
+          // what the grab offset is measured from (see GRAB_OFFSET).
+          const { fore, aft } = overlays.fins[finIndex]!.baseLine;
+          const at = screenToWorld(vp, p);
+          drag.current = {
+            mode: 'fin',
+            index: finIndex,
+            grab: { x: (fore.x + aft.x) / 2 - at.x, y: (fore.y + aft.y) / 2 - at.y },
+          };
           return;
         }
       }
@@ -1039,7 +1080,7 @@ export function SplineEditor({
           // there showing a stale position next to a live one. Drop it for the drag.
           setHover(null);
         }
-        onMoveSection?.(d.index, world.x);
+        onMoveSection?.(d.index, world.x + d.grab);
         return;
       }
       if (d.mode === 'traceMove') {
@@ -1057,12 +1098,15 @@ export function SplineEditor({
         );
         return;
       }
+      // GRAB_OFFSET: what the pointer moves, the handle moves — it is never assigned
+      // the pointer's own position, which would snap it under the cursor.
+      const held = { x: world.x + d.grab.x, y: world.y + d.grab.y };
       if (d.mode === 'fin') {
-        store.getState().moveFin(d.index, world);
+        store.getState().moveFin(d.index, held);
         return;
       }
-      if (d.hit.kind === 'end') store.getState().moveControlPoint(d.target, d.hit.index, world);
-      else store.getState().moveTangent(d.target, d.hit.index, d.hit.kind, world);
+      if (d.hit.kind === 'end') store.getState().moveControlPoint(d.target, d.hit.index, held);
+      else store.getState().moveTangent(d.target, d.hit.index, d.hit.kind, held);
     },
     [
       vp,

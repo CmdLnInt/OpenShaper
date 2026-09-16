@@ -16,7 +16,7 @@ export {
   type ScreenPoint,
 } from './viewport';
 export { sampleSpline, boundsOf } from './sample';
-export { hitTest, type Hit, type HandleKind } from './hit';
+export { handlePoint, hitTest, type Hit, type HandleKind } from './hit';
 export {
   handleKindForVisualSide,
   visualSideForHandleKind,
