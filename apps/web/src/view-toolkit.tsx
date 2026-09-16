@@ -324,7 +324,12 @@ export function EditorPane({
   // re-fit/draw effects keyed on it) only changes when the pane actually changes.
   const p = useMemo(() => paneProps(kind, csIndex, settings), [kind, csIndex, settings]);
   return (
-    <Panel className="flex min-h-0 flex-col">
+    // `h-full` is load-bearing: in the quad layouts the pane is a grid item and
+    // stretches on its own, but a maximized pane's parent is a plain block, so
+    // without it the Panel shrinks to its content and leaves the rest of the
+    // screen empty — two thirds of it on a phone. The 3D pane has always passed
+    // its own `h-full` for the same reason.
+    <Panel className="flex h-full min-h-0 flex-col">
       {/*
         The header must keep a constant height. It used to wrap, and on a narrow
         (phone) pane selecting a control point pushed the position editor onto a
