@@ -24,11 +24,20 @@ test.describe('editing on a phone-sized viewport', () => {
     await expect(canvas).toHaveCount(1);
     const before = (await canvas.boundingBox())!;
 
-    // The outline is framed with 24px of padding and is far wider than it is
-    // tall, so the fit is width-constrained: the nose knot — outline (0, 0),
-    // on the mirror centreline — sits exactly at the left padding, vertically
-    // centred. That makes the click deterministic instead of a blind hunt.
-    await page.mouse.click(before.x + 24, before.y + before.height / 2);
+    // Where the tail knot — outline (0, 0), on the mirror centreline — is drawn.
+    // The outline is framed with 24px of padding, and the fit is decided by the
+    // board's long axis, so that knot sits exactly at the padding on the near end
+    // of it. That makes the click deterministic instead of a blind hunt.
+    //
+    // Which end depends on the orientation. On a portrait phone pane the board is
+    // now drawn nose-up, so it is bottom-centre rather than left-middle.
+    const turned = await page.evaluate(
+      () => getComputedStyle(document.querySelector('canvas')!).transform !== 'none',
+    );
+    const tail = turned
+      ? { x: before.x + before.width / 2, y: before.y + before.height - 24 }
+      : { x: before.x + 24, y: before.y + before.height / 2 };
+    await page.mouse.click(tail.x, tail.y);
     await expect(page.getByLabel(/ position editor$/)).toBeVisible();
 
     // The position editor is now showing in the pane header. The canvas must not

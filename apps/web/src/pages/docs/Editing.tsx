@@ -45,6 +45,15 @@ export default function DocsEditing() {
           in that width leaves none of them usable, so a phone opens on the outline and switches
           between the single views instead.
         </p>
+        <p>
+          On a touch screen, outline and rocker are drawn <strong>nose-up</strong> whenever the pane
+          is taller than it is wide — which on a phone held upright it is. A board is about four
+          times longer than it is wide, so lying it across a narrow pane wastes most of the height;
+          standing it up trades that for about half as much again in size. Turn the phone sideways
+          and the board lies down again, because a wide pane already fits it the better way round.
+          Nothing to set, and it never applies to the cross-section view, which is already the shape
+          of its pane.
+        </p>
       </Section>
 
       <Section id="guides" title="Guides in 3D">

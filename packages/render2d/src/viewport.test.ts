@@ -4,8 +4,11 @@ import {
   fitToBounds,
   lifeSizeViewport,
   pan,
+  paneToTurnedCanvas,
   reframeForSize,
   screenToWorld,
+  turnedCanvasToPane,
+  turnFitsLarger,
   viewportCenter,
   viewportFromCenter,
   worldToScreen,
@@ -164,5 +167,80 @@ describe('reframeForSize', () => {
     const after = reframeForSize(vp, 600, 400, 600, 356);
     expect(after.originX).toBeCloseTo(vp.originX, 9);
     expect(after.originY).toBeCloseTo(vp.originY - 22, 9);
+  });
+});
+
+describe('turnFitsLarger', () => {
+  // A surfboard: 187.96 x 46.99 cm, the sample board the app opens on.
+  const board = { minX: 0, minY: -23.495, maxX: 187.96, maxY: 23.495 };
+
+  it('says yes for the phone pane the turn was built for', () => {
+    // 334x451, measured off the maximized outline pane at 360x780.
+    expect(turnFitsLarger(board, 334, 451)).toBe(true);
+  });
+
+  it('says no for a landscape phone pane, where turning costs a factor of three', () => {
+    // 818x263. This is the answer that makes the feature safe without a breakpoint:
+    // a wide pane already fits the board by its height, so there is nothing to win
+    // and a great deal to lose.
+    expect(turnFitsLarger(board, 818, 263)).toBe(false);
+  });
+
+  it('says no for a desktop pane', () => {
+    expect(turnFitsLarger(board, 1200, 600)).toBe(false);
+  });
+
+  it('never claims a gain it cannot deliver', () => {
+    // The predicate's whole contract: acting on `true` must raise the scale, and
+    // acting on `false` must not be leaving one on the table.
+    for (const [w, h] of [
+      [334, 451],
+      [818, 263],
+      [400, 400],
+      [200, 900],
+      [900, 200],
+    ] as const) {
+      const upright = fitToBounds(board, w, h).scale;
+      const turned = fitToBounds(board, h, w).scale;
+      expect(turnFitsLarger(board, w, h)).toBe(turned > upright);
+    }
+  });
+});
+
+describe('the turned-pane pointer mapping', () => {
+  // `canvasW` is the canvas's own width, which is the pane's height.
+  const canvasW = 451;
+
+  it('round-trips', () => {
+    for (const p of [
+      { x: 0, y: 0 },
+      { x: 334, y: 451 },
+      { x: 17, y: 409 },
+      { x: 333.5, y: 0.25 },
+    ]) {
+      const back = turnedCanvasToPane(paneToTurnedCanvas(p, canvasW), canvasW);
+      expect(back.x).toBeCloseTo(p.x, 9);
+      expect(back.y).toBeCloseTo(p.y, 9);
+    }
+  });
+
+  it('sends the top of the pane to the far end of the canvas', () => {
+    // The nose is drawn at the canvas's +x end and must appear at the TOP of the
+    // pane, which is what makes the board read nose-up.
+    expect(paneToTurnedCanvas({ x: 0, y: 0 }, canvasW)).toEqual({ x: canvasW, y: 0 });
+    expect(paneToTurnedCanvas({ x: 0, y: canvasW }, canvasW)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('keeps every pane point inside the canvas', () => {
+    const paneW = 334;
+    for (let x = 0; x <= paneW; x += 37) {
+      for (let y = 0; y <= canvasW; y += 41) {
+        const c = paneToTurnedCanvas({ x, y }, canvasW);
+        expect(c.x).toBeGreaterThanOrEqual(0);
+        expect(c.x).toBeLessThanOrEqual(canvasW);
+        expect(c.y).toBeGreaterThanOrEqual(0);
+        expect(c.y).toBeLessThanOrEqual(paneW);
+      }
+    }
   });
 });

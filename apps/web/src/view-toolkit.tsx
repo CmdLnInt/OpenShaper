@@ -34,6 +34,7 @@ import { fmtLen, LENGTH_UNITS, type LengthUnit } from './format';
 import { SelectedPointEditor } from './ControlPointInspector';
 import { boardStore } from './store';
 import type { EditorSettings } from './settings';
+import { useIsCoarsePointer } from './useMediaQuery';
 import {
   ANALYSIS_3D,
   LIGHTING_3D,
@@ -394,6 +395,12 @@ export function EditorPane({
   // Stable across re-renders so the editor's target set (and the SplineEditor
   // re-fit/draw effects keyed on it) only changes when the pane actually changes.
   const p = useMemo(() => paneProps(kind, csIndex, settings), [kind, csIndex, settings]);
+  // Only the length-wise views have anything to gain from turning the board — a
+  // cross-section is already the shape of the pane it sits in. Gated on the pointer
+  // rather than on width so a narrow desktop window does not suddenly rotate under
+  // a mouse; whether the turn actually helps is then decided per pane inside
+  // `SplineEditor`, which is what keeps it from ever making a pane worse.
+  const allowTurn = useIsCoarsePointer() && kind !== 'crossSection';
   return (
     // `h-full` is load-bearing: in the quad layouts the pane is a grid item and
     // stretches on its own, but a maximized pane's parent is a plain block, so
@@ -436,6 +443,7 @@ export function EditorPane({
           formatSectionPosition={(cm) => fmtLen(cm, units)}
           onAddSectionAt={kind !== 'crossSection' ? onAddSectionAt : undefined}
           onScrub={kind !== 'crossSection' ? onScrub : undefined}
+          allowTurn={allowTurn}
           readout={makeReadout(kind, units)}
           measureCursor={kind === 'crossSection'}
           overlays={overlays}

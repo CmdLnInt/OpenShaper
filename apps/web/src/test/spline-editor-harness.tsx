@@ -18,6 +18,7 @@ import {
 } from '@openshaper/kernel';
 import {
   SplineEditor,
+  turnedCanvasToPane,
   viewportFromCenter,
   worldToScreen,
   type ViewCenter,
@@ -137,10 +138,21 @@ export const mountEditor = (overrides: Partial<EditorProps> = {}) => {
     />,
   );
   const canvas = rendered.container.querySelector('canvas')!;
-  /** The client coordinates a pointer event must carry to sit on `world`. */
+  /**
+   * The client coordinates a pointer event must carry to sit on `world`.
+   *
+   * A turned pane draws into a canvas whose axes are the swapped pair, rotated into
+   * the pane by CSS. `turnedCanvasToPane` is the same mapping `localPoint` inverts,
+   * imported rather than re-derived — a test that re-implements the transform it is
+   * checking proves only that two copies of a mistake agree.
+   */
   const screenOf = (world: Vec2) => {
-    const s = worldToScreen(viewportFromCenter(view!, pane.w, pane.h), world);
-    return { clientX: s.x, clientY: s.y + pane.top };
+    const turned = overrides.allowTurn === true && pane.h > pane.w;
+    const cw = turned ? pane.h : pane.w;
+    const ch = turned ? pane.w : pane.h;
+    const local = worldToScreen(viewportFromCenter(view!, cw, ch), world);
+    const inPane = turned ? turnedCanvasToPane(local, cw) : local;
+    return { clientX: inPane.x, clientY: inPane.y + pane.top };
   };
   const knotAt = (index = 1) => store.getState().board!.outline.knots[index]!;
   return { store, canvas, screenOf, knotAt, midKnot: () => knotAt().end, scale: () => view!.scale };

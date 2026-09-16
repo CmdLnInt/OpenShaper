@@ -7,14 +7,20 @@
  *
  * Measured in Chromium, maximized outline view, sample board:
  *
- *     portrait  360x780   canvas 334x467   1.52 px/cm  (width-limited)
- *     landscape 844x390   canvas 818x263   3.95 px/cm  (height-limited)
+ *     portrait  360x780   canvas 334x451   2.14 px/cm  (turned nose-up)
+ *     landscape 844x390   canvas 818x263   4.10 px/cm  (height-limited)
  *
- * 2.6x, for no work at all. Note the landscape number only holds because the
- * header collapses to one row and the sheet starts closed there — measured
- * before those, landscape was 1.32 px/cm, i.e. *worse* than portrait, and this
- * hint was giving bad advice. If that chrome comes back, re-measure before
- * trusting this comment.
+ * 1.9x, for no work at all. It was 2.7x before the board turn shipped: portrait
+ * is now drawn nose-up, which took it from 1.52 to 2.14 and shrank the prize for
+ * rotating the device. Still the biggest single win available here, and still
+ * free, but the gap is closing and this hint should be retired rather than
+ * reworded if it ever stops being worth the row it occupies.
+ *
+ * Note the landscape number only holds because the header collapses to one row
+ * and the sheet starts closed there — measured before those, landscape was
+ * 1.32 px/cm, i.e. *worse* than portrait, and this hint was giving bad advice.
+ * This comment has now been wrong twice by going stale. Re-measure before
+ * trusting it.
  *
  * Deliberately inline rather than a `Toast`: `Toast` and `ConsentBanner` both sit
  * at `bottom-28 z-50`, and on a 360x780 first load the consent banner's own

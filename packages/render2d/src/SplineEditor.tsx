@@ -11,6 +11,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -47,7 +48,9 @@ import {
   lifeSizeViewport,
   pan,
   reframeForSize,
+  paneToTurnedCanvas,
   screenToWorld,
+  turnFitsLarger,
   viewportCenter,
   viewportFromCenter,
   worldToScreen,
@@ -180,6 +183,15 @@ export interface SplineEditorProps {
    * for persistence by the owner. Called with world center + zoom.
    */
   onViewChange?: (v: ViewCenter) => void;
+  /**
+   * Allow drawing the board turned nose-up when that fits it larger.
+   *
+   * Only the owner knows whether this view is length-wise (outline and rocker are;
+   * a cross-section is not) and whether the pointer is a fingertip. Whether the
+   * turn actually *helps* is decided here, per pane, by {@link turnFitsLarger} —
+   * so passing this can never shrink anything.
+   */
+  allowTurn?: boolean;
   className?: string;
 }
 
@@ -427,12 +439,13 @@ export function SplineEditor({
   viewCommand,
   initialView,
   onViewChange,
+  allowTurn = false,
   className,
 }: SplineEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const board = useBoard(store);
-  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [pane, setPane] = useState({ w: 0, h: 0 });
   const [vp, setVp] = useState<Viewport | null>(null);
   const [hover, setHover] = useState<Vec2 | null>(null);
   const [hoveredControl, setHoveredControl] = useState<{
@@ -494,11 +507,45 @@ export function SplineEditor({
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    const ro = new ResizeObserver(() => setPane({ w: el.clientWidth, h: el.clientHeight }));
     ro.observe(el);
-    setSize({ w: el.clientWidth, h: el.clientHeight });
+    setPane({ w: el.clientWidth, h: el.clientHeight });
     return () => ro.disconnect();
   }, []);
+
+  /**
+   * The world extent being drawn, mirrors included.
+   *
+   * Three things need it — the auto-fit, the "fit view" command, and the turn
+   * decision — and the first two used to sample and mirror the splines separately
+   * with identical code.
+   */
+  const bounds = useMemo(() => {
+    if (!board) return null;
+    const all = targets.flatMap((t) => sampleSpline(getTargetSpline(board, t)));
+    if (all.length === 0) return null;
+    let pts = all;
+    if (mirrorY) pts = pts.flatMap((p) => [p, { x: p.x, y: -p.y }]);
+    if (mirrorX) pts = pts.flatMap((p) => [p, { x: -p.x, y: p.y }]);
+    return boundsOf(pts);
+  }, [board, targets, mirrorX, mirrorY]);
+
+  /**
+   * TURNED: draw the board nose-up, by rotating the canvas ELEMENT rather than the
+   * transform inside it.
+   *
+   * The canvas keeps an ordinary, unrotated coordinate system — it simply believes
+   * it is a landscape canvas of the swapped size. So every screen-space consumer
+   * (`draw.ts`, `hit.ts`, `trace-transform.ts`, `pan`, `zoomAt`, `fitToBounds`) is
+   * untouched and keeps working in exactly the space it always did. Only two things
+   * know about the rotation: the CSS transform on the element, and `localPoint`,
+   * which maps a page coordinate back into that space.
+   *
+   * `size` is what the rest of the component sees, so swapping it here is what puts
+   * everything downstream into the turned space.
+   */
+  const turned = allowTurn && pane.w > 0 && !!bounds && turnFitsLarger(bounds, pane.w, pane.h);
+  const size = turned ? { w: pane.h, h: pane.w } : pane;
 
   // Re-fit when the target set changes, or we first get a board + a size.
   // A restored framing (initialView) replaces only the first fit of the mount;
@@ -545,13 +592,9 @@ export function SplineEditor({
       return;
     }
 
-    const all = targets.flatMap((t) => sampleSpline(getTargetSpline(board, t)));
-    if (all.length === 0) return;
-    let pts = all;
-    if (mirrorY) pts = pts.flatMap((p) => [p, { x: p.x, y: -p.y }]);
-    if (mirrorX) pts = pts.flatMap((p) => [p, { x: -p.x, y: p.y }]);
+    if (!bounds) return;
     framedSize.current = { w: size.w, h: size.h };
-    setVp(fitToBounds(boundsOf(pts), size.w, size.h));
+    setVp(fitToBounds(bounds, size.w, size.h));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, board === null, size.w, size.h]);
 
@@ -608,10 +651,12 @@ export function SplineEditor({
               text: formatSectionPosition(dragged.pos),
             }
           : null,
+        turned,
       );
     }
     if (overlays?.distribution) drawDistribution(ctx, overlays.distribution, vp, size.h);
-    if (overlays?.verticalMarkers) drawVerticalMarkers(ctx, overlays.verticalMarkers, vp, size.h);
+    if (overlays?.verticalMarkers)
+      drawVerticalMarkers(ctx, overlays.verticalMarkers, vp, size.h, turned);
     if (overlays?.fins && overlays.fins.length > 0) {
       if (overlays.finView === 'profile') drawFinsProfile(ctx, overlays.fins, vp, selectedFin);
       else drawFinsPlan(ctx, overlays.fins, vp, selectedFin);
@@ -712,19 +757,25 @@ export function SplineEditor({
   const localPoint = (e: React.MouseEvent): { x: number; y: number } => {
     const pinned = (drag.current || pinch.current) && gestureRect.current;
     const r = pinned ?? canvasRef.current!.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
+    const dx = e.clientX - r.left;
+    const dy = e.clientY - r.top;
+    // TURNED: the element is rotated -90° about its own top-left and slid down by
+    // its width, so canvas-local (lx, ly) sits at pane (ly, size.w - lx). This is
+    // that, inverted. `getBoundingClientRect` on a rotated element returns the
+    // axis-aligned box, which for an exact quarter turn is the pane box — so
+    // `dx`/`dy` are already pane-relative and only the axes have to be undone.
+    //
+    // The single place a mistake here shows up is "the point does not follow my
+    // finger", which is the bug this whole branch started with, so it is pinned by
+    // a round-trip test rather than trusted.
+    return turned ? paneToTurnedCanvas({ x: dx, y: dy }, size.w) : { x: dx, y: dy };
   };
 
   // Re-home the view to fit the curves (shared by double-click and the context menu).
   const fitView = useCallback(() => {
-    if (!board || size.w === 0) return;
-    const all = targets.flatMap((t) => sampleSpline(getTargetSpline(board, t)));
-    if (all.length === 0) return;
-    let pts = all;
-    if (mirrorY) pts = pts.flatMap((p) => [p, { x: p.x, y: -p.y }]);
-    if (mirrorX) pts = pts.flatMap((p) => [p, { x: -p.x, y: p.y }]);
-    setVp(fitToBounds(boundsOf(pts), size.w, size.h));
-  }, [board, targets, mirrorX, mirrorY, size.w, size.h]);
+    if (!bounds || size.w === 0) return;
+    setVp(fitToBounds(bounds, size.w, size.h));
+  }, [bounds, size.w, size.h]);
 
   // Respond to imperative view commands (fit / lifeSize) driven by the seq counter.
   // The effect only fires when seq changes — the same kind can be issued multiple
@@ -1319,8 +1370,21 @@ export function SplineEditor({
       <canvas
         ref={canvasRef}
         style={{
-          width: '100%',
-          height: '100%',
+          // Turned, the element is laid out at its own (landscape) size and rotated
+          // into the pane; upright, it just fills it. Rotating the ELEMENT rather
+          // than the drawing keeps the canvas's coordinate system ordinary, which
+          // is what leaves every hit test and draw routine untouched.
+          ...(turned
+            ? {
+                position: 'absolute' as const,
+                top: 0,
+                left: 0,
+                width: `${size.w}px`,
+                height: `${size.h}px`,
+                transformOrigin: '0 0',
+                transform: `translate(0px, ${size.w}px) rotate(-90deg)`,
+              }
+            : { width: '100%', height: '100%' }),
           display: 'block',
           touchAction: 'none',
           cursor,
