@@ -35,8 +35,8 @@ export default function DocsFiles() {
       <Section id="saving" title="Saving & opening">
         <Terms>
           <Term name=".board.json">
-            OpenShaper's own format. Plain JSON, so it stays readable and diffable, and it round-trips
-            everything the app knows about a board.
+            OpenShaper's own format. Plain JSON, so it stays readable and diffable, and it
+            round-trips everything the app knows about a board.
           </Term>
           <Term name=".brd">
             The legacy BoardCAD format. Written for compatibility with the older tool, though some
@@ -65,8 +65,9 @@ export default function DocsFiles() {
       <Section id="warnings" title="Import warnings">
         <p>
           When a file contains something that cannot be represented exactly, you are told rather
-          than left to notice later. Two levels: a notice when the file was repaired non-destructively,
-          and a confirmation you have to accept when detail will actually be dropped.
+          than left to notice later. Two levels: a notice when the file was repaired
+          non-destructively, and a confirmation you have to accept when detail will actually be
+          dropped.
         </p>
       </Section>
 
@@ -74,7 +75,8 @@ export default function DocsFiles() {
         <p>
           On your device. The board you are working on is saved continuously to browser storage, so
           closing the tab and returning restores it — along with your view, camera position, trace
-          images and settings.
+          images and settings. A phone is the one exception to the view: it does not offer the quad
+          view, so it opens on the outline instead and leaves your stored preference alone.
         </p>
         <p>
           Boards are saved in your browser, not to an account. That also means clearing your
@@ -85,9 +87,9 @@ export default function DocsFiles() {
       <Section id="trace" title="Tracing from an image">
         <p>
           You can load a photo or scan behind the outline or rocker view and shape to it. Calibrate
-          by clicking four known points and entering a real dimension, then move, rotate and flip the
-          image to line it up. Trace images are stored per view on your device and are not part of
-          the board file.
+          by clicking four known points and entering a real dimension, then move, rotate and flip
+          the image to line it up. Trace images are stored per view on your device and are not part
+          of the board file.
         </p>
       </Section>
     </DocsPage>

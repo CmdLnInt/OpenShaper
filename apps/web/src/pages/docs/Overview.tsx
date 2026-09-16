@@ -31,7 +31,10 @@ export default function DocsOverview() {
         <Terms>
           <Term name="The panes">
             Four views of the same board — outline, rocker, cross-section and 3D. The quad view
-            shows all four at once; keys <code>1</code>–<code>5</code> switch between them.
+            shows all four at once; keys <code>1</code>–<code>5</code> switch between them. On
+            phones the quad view is not offered — four panes in a phone's width leaves none of them
+            usable — so the editor opens on the outline and keys <code>2</code>–<code>5</code>{' '}
+            switch.
           </Term>
           <Term name="The sidebar">
             Live specs, resize, board details, fins, weight estimate, trace images and the overlay
@@ -61,7 +64,7 @@ export default function DocsOverview() {
       <Section id="where" title="Where things live">
         <Terms>
           <Term name={<Link to="/docs/editing">Editing a board</Link>}>
-            Control points, tangents, the four views, undo.
+            Control points, tangents, the views, undo.
           </Term>
           <Term name={<Link to="/docs/specs">Specs &amp; measurements</Link>}>
             Volume, dimensions, weight, the readouts and overlays.

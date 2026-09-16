@@ -9,9 +9,9 @@ export default function DocsEditing() {
     <DocsPage
       route="/docs/editing"
       title="Editing a board"
-      lede="Control points, tangent handles, the four views, and how cross-sections interpolate."
+      lede="Control points, tangent handles, the views, and how cross-sections interpolate."
       toc={[
-        { id: 'views', label: 'The four views' },
+        { id: 'views', label: 'The views' },
         { id: 'guides', label: 'Guides in 3D' },
         { id: 'points', label: 'Control points & tangents' },
         { id: 'sections', label: 'Cross-sections' },
@@ -20,7 +20,7 @@ export default function DocsEditing() {
         { id: 'undo', label: 'Undo & history' },
       ]}
     >
-      <Section id="views" title="The four views">
+      <Section id="views" title="The views">
         <Terms>
           <Term name="Outline">
             The plan shape, seen from above. Mirrored about the stringer, so you edit one half and
@@ -41,7 +41,9 @@ export default function DocsEditing() {
         </Terms>
         <p>
           The quad view shows all four at once. Number keys switch views — see{' '}
-          <Link to="/docs/shortcuts">shortcuts</Link>.
+          <Link to="/docs/shortcuts">shortcuts</Link>. Phones do not get the quad view: four panes
+          in that width leaves none of them usable, so a phone opens on the outline and switches
+          between the single views instead.
         </p>
       </Section>
 
@@ -185,7 +187,10 @@ export default function DocsEditing() {
         </p>
         <p>
           Your working board is saved to this device continuously, so closing the tab and coming
-          back restores it, along with the view you were in and the camera position.
+          back restores it, along with the view you were in and the camera position. The one
+          exception is the quad view on a phone, which is not offered there — a board last left in
+          it opens on the outline, and the stored preference is kept for the next time you open the
+          editor on a bigger screen.
         </p>
       </Section>
     </DocsPage>
