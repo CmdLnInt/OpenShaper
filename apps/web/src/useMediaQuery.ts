@@ -36,6 +36,8 @@ export function useMediaQuery(query: string, initial = false): boolean {
   );
 }
 
+const SHORT_VIEWPORT = '(max-height: 480px)';
+
 /** True at the editor's desktop tier (Tailwind `lg`, ≥ 1024px). */
 export function useIsDesktop(): boolean {
   return useMediaQuery('(min-width: 1024px)');
@@ -50,5 +52,23 @@ export function useIsDesktop(): boolean {
  * enough to pass a width test but far too short for a column of stacked panes.
  */
 export function useIsPhone(): boolean {
-  return useMediaQuery('(max-width: 640px), (max-height: 480px)');
+  return useMediaQuery(`(max-width: 640px), ${SHORT_VIEWPORT}`);
+}
+
+/**
+ * A viewport with very little height — a phone held landscape, mostly.
+ *
+ * Height is the scarce axis there, not width: at 844x390 the two header rows and
+ * the sheet's peek take more than half the screen. Chrome that collapses on this
+ * query must be gated on height and not on width, because the merged single
+ * header row needs ~399px, which 844 has and 360 does not.
+ */
+export function useIsShortViewport(): boolean {
+  return useMediaQuery(SHORT_VIEWPORT);
+}
+
+/** The same query, for a `useState` initialiser that cannot call a hook. */
+export function isShortViewport(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia(SHORT_VIEWPORT).matches;
 }

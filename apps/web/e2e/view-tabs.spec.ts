@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { editorReady } from './helpers';
 
 /**
  * Every view tab must be reachable, not merely rendered.
@@ -38,7 +39,7 @@ for (const viewport of [
 
     test(`every tab is reachable on ${viewport.name}`, async ({ page }) => {
       await page.goto('/app');
-      await page.getByText('Length').first().waitFor();
+      await editorReady(page);
 
       const tabs = await tabVisibility(page);
       expect(tabs.length, 'the strip should render some tabs').toBeGreaterThan(0);
@@ -57,7 +58,7 @@ test.describe('the unit picker follows the space available', () => {
   test('sits in the toolbar on a desktop', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/app');
-    await page.getByText('Length').first().waitFor();
+    await editorReady(page);
     // Exactly one picker, and it is outside the bottom sheet.
     const picker = page.getByLabel('Display units');
     await expect(picker).toHaveCount(1);
@@ -67,7 +68,7 @@ test.describe('the unit picker follows the space available', () => {
   test('moves into the sheet on a phone', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 780 });
     await page.goto('/app');
-    await page.getByText('Length').first().waitFor();
+    await editorReady(page);
 
     const picker = page.getByLabel('Display units');
     await expect(picker, 'still exactly one picker, not two').toHaveCount(1);

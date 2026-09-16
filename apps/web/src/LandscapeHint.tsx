@@ -1,12 +1,20 @@
 /**
  * A one-time nudge to turn a phone sideways.
  *
- * The editor's 2D views are length-wise: a 1879 x 525mm board is about 3.6:1, so
- * in a 336x609 portrait pane the fit is width-constrained and the board occupies
- * roughly 80px of 609. The same phone in landscape gives a 820x278 pane, where
- * the board draws at ~4.11 px/cm against ~1.53 — nearly three times the size, for
- * no work at all. It is the cheapest improvement available on a phone, and it is
- * invisible unless someone says so.
+ * The editor's 2D views are length-wise: a 1879 x 544mm board is about 3.5:1, so
+ * in a portrait pane the fit is width-constrained and most of the height goes
+ * unused. Turning the phone trades that height for width.
+ *
+ * Measured in Chromium, maximized outline view, sample board:
+ *
+ *     portrait  360x780   canvas 334x467   1.52 px/cm  (width-limited)
+ *     landscape 844x390   canvas 818x263   3.95 px/cm  (height-limited)
+ *
+ * 2.6x, for no work at all. Note the landscape number only holds because the
+ * header collapses to one row and the sheet starts closed there — measured
+ * before those, landscape was 1.32 px/cm, i.e. *worse* than portrait, and this
+ * hint was giving bad advice. If that chrome comes back, re-measure before
+ * trusting this comment.
  *
  * Deliberately inline rather than a `Toast`: `Toast` and `ConsentBanner` both sit
  * at `bottom-28 z-50`, and on a 360x780 first load the consent banner's own

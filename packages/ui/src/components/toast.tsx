@@ -25,7 +25,7 @@ function toastStack(): HTMLElement {
   // col-reverse: the first toast sits nearest the bottom anchor and later ones
   // stack upwards, so an arriving toast never displaces one being read.
   el.className =
-    'pointer-events-none fixed bottom-28 left-1/2 z-50 flex -translate-x-1/2 flex-col-reverse items-center gap-2 lg:bottom-4';
+    'pointer-events-none fixed bottom-[calc(var(--os-sheet-inset)+1rem)] left-1/2 z-50 flex -translate-x-1/2 flex-col-reverse items-center gap-2';
   document.body.appendChild(el);
   return el;
 }

@@ -2,14 +2,21 @@ import { useCallback, useRef, useState, type PointerEvent, type ReactNode } from
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn';
 
-export type SheetSnap = 'peek' | 'half' | 'full';
+export type SheetSnap = 'closed' | 'peek' | 'half' | 'full';
 
+/**
+ * The tap cycle, which deliberately excludes `closed`: a closed sheet has no
+ * handle to tap, so cycling into it would strand the only control that reopens
+ * it. Closing is reachable by dragging down past peek, or from the host's own
+ * toggle.
+ */
 const SNAP_ORDER: SheetSnap[] = ['peek', 'half', 'full'];
-const PEEK_PX = 112; // ~h-28: just the peek header + a sliver of body
+export const PEEK_PX = 112; // ~h-28: just the peek header + a sliver of body
 const TAP_SLOP = 6;
 
 /** Pixel height of a snap point for the current viewport. */
 function snapHeight(snap: SheetSnap): number {
+  if (snap === 'closed') return 0;
   if (typeof window === 'undefined') return PEEK_PX;
   const h = window.innerHeight;
   switch (snap) {
@@ -30,6 +37,12 @@ export interface BottomSheetProps {
   peek?: ReactNode;
   /** Scrollable sheet body (the full panel list). */
   children: ReactNode;
+  /**
+   * Allow dragging the sheet shut. On a short viewport the 112px peek is a
+   * quarter of the screen, so being able to get it out of the way entirely is
+   * worth more than the always-visible readout it costs.
+   */
+  canClose?: boolean;
   className?: string;
 }
 
@@ -42,9 +55,20 @@ export interface BottomSheetProps {
  * the `full` snap (so the canvas stays interactive at peek/half); tapping it
  * collapses back to `peek`.
  */
-export function BottomSheet({ snap, onSnapChange, peek, children, className }: BottomSheetProps) {
+export function BottomSheet({
+  snap,
+  onSnapChange,
+  peek,
+  children,
+  canClose = false,
+  className,
+}: BottomSheetProps) {
   const [dragPx, setDragPx] = useState<number | null>(null);
   const drag = useRef<{ startY: number; startH: number; moved: boolean } | null>(null);
+  // Read inside the move handler, which is memoised with no deps.
+  const floor = useRef(0);
+  floor.current = canClose ? 0 : PEEK_PX;
+  const points = canClose ? ([...SNAP_ORDER, 'closed'] as SheetSnap[]) : SNAP_ORDER;
 
   const height = dragPx ?? snapHeight(snap);
 
@@ -63,7 +87,7 @@ export function BottomSheet({ snap, onSnapChange, peek, children, className }: B
     const dy = d.startY - e.clientY; // up = grow
     if (Math.abs(dy) > TAP_SLOP) d.moved = true;
     const max = snapHeight('full');
-    setDragPx(Math.max(PEEK_PX, Math.min(d.startH + dy, max)));
+    setDragPx(Math.max(floor.current, Math.min(d.startH + dy, max)));
   }, []);
 
   const onPointerUp = useCallback(
@@ -83,7 +107,7 @@ export function BottomSheet({ snap, onSnapChange, peek, children, className }: B
       const h = dragPx ?? snapHeight(snap);
       let best: SheetSnap = 'peek';
       let bestD = Infinity;
-      for (const s of SNAP_ORDER) {
+      for (const s of points) {
         const dd = Math.abs(snapHeight(s) - h);
         if (dd < bestD) {
           bestD = dd;
@@ -93,8 +117,12 @@ export function BottomSheet({ snap, onSnapChange, peek, children, className }: B
       setDragPx(null);
       onSnapChange(best);
     },
-    [dragPx, snap, onSnapChange],
+    [dragPx, snap, onSnapChange, points],
   );
+
+  // Closed: unmount rather than render a zero-height dialog, which would leave a
+  // named region full of focusable controls in the accessibility tree.
+  if (snap === 'closed') return null;
 
   return createPortal(
     <>

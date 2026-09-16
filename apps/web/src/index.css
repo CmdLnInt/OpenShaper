@@ -21,6 +21,17 @@ body,
   height: 100%;
 }
 
+/*
+ * How much of the viewport bottom the editor's bottom sheet is occupying. Fixed
+ * elements that must sit clear of it — the toast stack, the consent banner —
+ * read this instead of hardcoding the peek height, which they did, and which
+ * meant they floated 112px above nothing once the sheet could be closed.
+ * The editor sets it while it is mounted; everywhere else it stays 0.
+ */
+:root {
+  --os-sheet-inset: 0px;
+}
+
 body {
   @apply bg-background text-foreground;
   font-family:

@@ -96,7 +96,7 @@ import { clampSectionIndex } from './section-index';
 import { VIEW_KEYS } from './shortcuts';
 import { useKeyboardShortcuts } from './use-keyboard-shortcuts';
 import { useSettledBoard } from './use-settled-board';
-import { useIsDesktop, useIsPhone } from './useMediaQuery';
+import { isShortViewport, useIsDesktop, useIsPhone, useIsShortViewport } from './useMediaQuery';
 import { useSpecsWorker } from './use-specs-worker';
 import { useTrace, type TraceView } from './use-trace';
 import {
@@ -272,6 +272,7 @@ function AppShell() {
   // Narrower (or shorter) still is the phone tier, which drops quad entirely.
   const isDesktop = useIsDesktop();
   const isPhone = useIsPhone();
+  const isShort = useIsShortViewport();
   const view = isViewAvailable(pickedView, isPhone) ? pickedView : FALLBACK_VIEW;
   const views = VIEW_KEYS.filter((v) => isViewAvailable(v.view, isPhone));
 
@@ -290,7 +291,29 @@ function AppShell() {
     [isPhone],
   );
 
-  const [sheetSnap, setSheetSnap] = useState<SheetSnap>('peek');
+  // A short viewport (a phone held landscape) starts with the sheet out of the
+  // way: its 112px peek is more than a quarter of the screen there, and the
+  // point of turning the phone is to see the board.
+  const [sheetSnap, setSheetSnap] = useState<SheetSnap>(() =>
+    isShortViewport() ? 'closed' : 'peek',
+  );
+  // The sheet is fixed over the viewport bottom whenever it is mounted, so the
+  // view area must reserve its peek height — and reclaim it when it is closed.
+  const sheetOpen = !isDesktop && sheetSnap !== 'closed';
+  // "Showing panels" means more than the peek readout — at `peek` the button's
+  // job is still to reveal them, so it opens rather than closes.
+  const panelsShowing = sheetSnap === 'half' || sheetSnap === 'full';
+
+  // Publish the sheet's footprint so fixed elements outside this tree (the toast
+  // stack, the consent banner) can sit clear of it — and reclaim the space when
+  // it closes.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--os-sheet-inset', sheetOpen ? '7rem' : '0px');
+    return () => {
+      root.style.removeProperty('--os-sheet-inset');
+    };
+  }, [sheetOpen]);
   const [csIndex, setCsIndex] = useState(1);
   const [focusedSection, setFocusedSection] = useState<number | null>(null);
   // Transient cross-pane scrub: the board-length x being hovered in the rocker/outline,
@@ -1168,18 +1191,28 @@ function AppShell() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-col border-b border-border bg-card text-card-foreground">
+      {/* Two 44px rows cost 88px, which is 23% of a landscape phone. Where height
+          is the scarce axis they sit side by side as one 44px row instead — the
+          wordmark and the Coffee link drop out to make the width work. */}
+      <div
+        className={cn(
+          'flex border-b border-border bg-card text-card-foreground',
+          isShort ? 'items-center' : 'flex-col',
+        )}
+      >
         {/* Row 1 — application menubar */}
-        <div className="flex h-11 items-center gap-1 px-1.5 sm:gap-2 sm:px-2">
+        <div className="flex h-11 shrink-0 items-center gap-1 px-1.5 sm:gap-2 sm:px-2">
           <a
             href="/"
             className="group flex items-center gap-2 px-1.5 font-semibold transition-colors hover:text-primary"
             title="OpenShaper home"
           >
             <Brandmark className="h-6 w-6 transition-transform duration-300 group-hover:rotate-3" />
-            <span className="hidden sm:inline">
-              Open<span className="text-primary">Shaper</span>
-            </span>
+            {!isShort && (
+              <span className="hidden sm:inline">
+                Open<span className="text-primary">Shaper</span>
+              </span>
+            )}
           </a>
           <ToolbarSeparator className="hidden sm:block" />
           {/* Phones: a single button opens the command palette, which lists every menu
@@ -1202,8 +1235,8 @@ function AppShell() {
             <Menu label="Export" items={exportMenu} />
             <Menu label="Help" items={helpMenu} />
           </MenuBar>
-          <div className="flex-1" />
-          {SUPPORT_URL && (
+          {!isShort && <div className="flex-1" />}
+          {SUPPORT_URL && !isShort && (
             <a
               href={SUPPORT_URL}
               target="_blank"
@@ -1222,7 +1255,12 @@ function AppShell() {
 
         {/* Row 2 — view tabs. The tabs scroll horizontally on narrow screens while the
             unit selector and (mobile) Panels toggle stay pinned to the right. */}
-        <div className="flex h-11 items-center gap-1 border-t border-border px-2">
+        <div
+          className={cn(
+            'flex h-11 min-w-0 flex-1 items-center gap-1 px-2',
+            isShort ? 'border-l border-border' : 'border-t border-border',
+          )}
+        >
           <div
             role="group"
             aria-label="Views"
@@ -1241,9 +1279,9 @@ function AppShell() {
             size="sm"
             variant="ghost"
             className="shrink-0 lg:hidden"
-            title="Show board panels"
-            aria-label="Show board panels"
-            onClick={() => setSheetSnap('half')}
+            title={panelsShowing ? 'Hide board panels' : 'Show board panels'}
+            aria-label={panelsShowing ? 'Hide board panels' : 'Show board panels'}
+            onClick={() => setSheetSnap(panelsShowing ? 'closed' : 'half')}
           >
             <SlidersHorizontal className="size-4" />
           </Button>
@@ -1276,16 +1314,18 @@ function AppShell() {
         />
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-3 p-3">
+      {/* pb clears the bottom sheet, which is fixed over the viewport bottom on
+          compact layouts. It belongs here rather than on the quad column: every
+          view needs it, and a maximized pane was running 99px underneath. */}
+      <div className={cn('flex min-h-0 flex-1 gap-3 p-3', sheetOpen && 'pb-28')}>
         <div className="min-h-0 min-w-0 flex-1">
           {view === 'quad' ? (
             isDesktop ? (
               <div className="grid h-full grid-cols-2 grid-rows-2 gap-3">{quadPanes}</div>
             ) : (
-              // Compact: a single scrolling column, each pane a comfortable fixed height.
-              // pb clears the collapsed bottom sheet (PEEK_PX≈112px, fixed over the viewport
-              // bottom) so the last pane — the 3D view — can scroll fully into view above it.
-              <div className="flex h-full flex-col gap-3 overflow-y-auto pb-28">
+              // Compact: a single scrolling column, each pane a comfortable fixed
+              // height. Clearance for the sheet lives on the container above.
+              <div className="flex h-full flex-col gap-3 overflow-y-auto">
                 {quadPanes.map((pane, i) => (
                   <div
                     key={i}
@@ -1362,7 +1402,12 @@ function AppShell() {
       </div>
 
       {!isDesktop && (
-        <BottomSheet snap={sheetSnap} onSnapChange={setSheetSnap} peek={sheetPeek}>
+        <BottomSheet
+          snap={sheetSnap}
+          onSnapChange={setSheetSnap}
+          peek={sheetPeek}
+          canClose={isPhone}
+        >
           {sidebarEl}
         </BottomSheet>
       )}

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { editorReady } from './helpers';
 
 /**
  * Phone-sized editing. Two things used to conspire to make control points
@@ -16,7 +17,7 @@ test.describe('editing on a phone-sized viewport', () => {
 
   test('selecting a control point does not resize the canvas', async ({ page }) => {
     await page.goto('/app');
-    await page.getByText('Length').waitFor();
+    await editorReady(page);
     await page.keyboard.press('2'); // maximize the outline pane
 
     const canvas = page.locator('canvas');
