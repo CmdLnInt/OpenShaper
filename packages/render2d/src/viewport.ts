@@ -121,3 +121,24 @@ export const pan = (vp: Viewport, dxPx: number, dyPx: number): Viewport => ({
  */
 export const lifeSizeViewport = (current: Viewport, canvasW: number, canvasH: number): Viewport =>
   zoomAt(current, { x: canvasW / 2, y: canvasH / 2 }, CSS_PX_PER_CM / current.scale);
+
+/**
+ * Carry a framing across a canvas resize without re-zooming.
+ *
+ * `fitToBounds` is the wrong response to a resize: it throws away whatever the
+ * user had panned/zoomed to and re-frames from scratch. This keeps the world
+ * point under the canvas centre and the zoom exactly as they were, so a pane
+ * that grows or shrinks (a header wrapping onto a second row, an orientation
+ * change) only reveals or hides margin.
+ *
+ * Note that the point under a *given screen pixel* still shifts by half the size
+ * delta — the centre is what is held. Callers mid-gesture want the screen<->world
+ * mapping frozen instead, i.e. to leave the viewport untouched entirely.
+ */
+export const reframeForSize = (
+  vp: Viewport,
+  prevW: number,
+  prevH: number,
+  nextW: number,
+  nextH: number,
+): Viewport => viewportFromCenter(viewportCenter(vp, prevW, prevH), nextW, nextH);

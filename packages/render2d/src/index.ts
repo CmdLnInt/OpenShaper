@@ -9,6 +9,7 @@ export {
   lifeSizeViewport,
   viewportFromCenter,
   viewportCenter,
+  reframeForSize,
   type ViewCenter,
   type Viewport,
   type Bounds,

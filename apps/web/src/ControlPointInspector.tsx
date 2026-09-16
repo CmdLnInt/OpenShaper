@@ -86,7 +86,7 @@ function HeaderCoordInput({
     onCommit(parsed);
   };
   return (
-    <label className="flex items-center gap-1 text-xs text-muted-foreground">
+    <label className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
       <span>{label}</span>
       <Input
         aria-label={`${label} position`}
@@ -207,8 +207,13 @@ export function SelectedPointEditor({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2" aria-label={`${label} position editor`}>
-      <span className="text-xs font-medium text-foreground">{label}</span>
+    // min-w-0 + horizontal scroll (never wrap): this sits in a fixed-height pane
+    // header, and adding a row there resizes the canvas mid-drag.
+    <div
+      className="no-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto"
+      aria-label={`${label} position editor`}
+    >
+      <span className="shrink-0 text-xs font-medium text-foreground">{label}</span>
       <HeaderCoordInput
         label="X"
         valueCm={point.x}
@@ -225,7 +230,7 @@ export function SelectedPointEditor({
         onDismiss={() => store.getState().select(null)}
         onNudge={nudge}
       />
-      <span className="text-[11px] text-muted-foreground">{unitSuffix(units)}</span>
+      <span className="shrink-0 text-[11px] text-muted-foreground">{unitSuffix(units)}</span>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import {
   fitToBounds,
   lifeSizeViewport,
   pan,
+  reframeForSize,
   screenToWorld,
   viewportCenter,
   viewportFromCenter,
@@ -135,5 +136,33 @@ describe('lifeSizeViewport', () => {
     // We can verify it's simply the CSS constant, not CSS_PX_PER_CM * some multiplier.
     expect(result.scale).toBeLessThan(CSS_PX_PER_CM * 1.001);
     expect(result.scale).toBeGreaterThan(CSS_PX_PER_CM * 0.999);
+  });
+});
+
+describe('reframeForSize', () => {
+  const vp = { scale: 4, originX: 120, originY: 340 };
+
+  it('holds the world point at the canvas centre and the zoom', () => {
+    const before = viewportCenter(vp, 600, 400);
+    const after = reframeForSize(vp, 600, 400, 600, 356);
+    expect(after.scale).toBe(vp.scale);
+    const moved = viewportCenter(after, 600, 356);
+    expect(moved.cx).toBeCloseTo(before.cx, 9);
+    expect(moved.cy).toBeCloseTo(before.cy, 9);
+  });
+
+  it('is a no-op when the size has not changed', () => {
+    const after = reframeForSize(vp, 600, 400, 600, 400);
+    expect(after.scale).toBeCloseTo(vp.scale, 9);
+    expect(after.originX).toBeCloseTo(vp.originX, 9);
+    expect(after.originY).toBeCloseTo(vp.originY, 9);
+  });
+
+  it('shifts the origin by half the size delta, never re-fitting', () => {
+    // Losing a 44px header row moves the centre up by 22px, so everything the
+    // viewport draws moves with it by exactly that — no change of zoom.
+    const after = reframeForSize(vp, 600, 400, 600, 356);
+    expect(after.originX).toBeCloseTo(vp.originX, 9);
+    expect(after.originY).toBeCloseTo(vp.originY - 22, 9);
   });
 });

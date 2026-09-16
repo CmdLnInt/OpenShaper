@@ -18,3 +18,11 @@ globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObse
 // so return null quietly instead of jsdom's noisy "not implemented" error.
 HTMLCanvasElement.prototype.getContext = (() =>
   null) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+
+// jsdom implements pointer events but not pointer capture, which SplineEditor
+// uses to keep a drag alive when the pointer leaves the canvas.
+HTMLElement.prototype.setPointerCapture ??= function setPointerCapture() {};
+HTMLElement.prototype.releasePointerCapture ??= function releasePointerCapture() {};
+HTMLElement.prototype.hasPointerCapture ??= function hasPointerCapture() {
+  return false;
+};

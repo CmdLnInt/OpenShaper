@@ -325,13 +325,22 @@ export function EditorPane({
   const p = useMemo(() => paneProps(kind, csIndex, settings), [kind, csIndex, settings]);
   return (
     <Panel className="flex min-h-0 flex-col">
-      <ViewPaneHeader className="flex-wrap gap-2">
-        <PanelTitle className="mr-auto">{title}</PanelTitle>
+      {/*
+        The header must keep a constant height. It used to wrap, and on a narrow
+        (phone) pane selecting a control point pushed the position editor onto a
+        second row — which shrank the canvas mid-drag and yanked the viewport out
+        from under the finger. One row always: the title truncates and the editor
+        scrolls sideways rather than either of them adding a row.
+      */}
+      <ViewPaneHeader className="gap-2">
+        <PanelTitle className="mr-auto min-w-0 truncate">{title}</PanelTitle>
         <SelectedPointEditor
           store={boardStore}
           units={units}
           targets={p.targets}
-          fallback={headerActions && <div className="flex items-center gap-1">{headerActions}</div>}
+          fallback={
+            headerActions && <div className="flex shrink-0 items-center gap-1">{headerActions}</div>
+          }
         />
       </ViewPaneHeader>
       <PanelBody className="min-h-0 flex-1 p-0">

@@ -46,6 +46,7 @@ import {
   fitToBounds,
   lifeSizeViewport,
   pan,
+  reframeForSize,
   screenToWorld,
   viewportCenter,
   viewportFromCenter,
@@ -472,21 +473,54 @@ export function SplineEditor({
   // Re-fit when the target set changes, or we first get a board + a size.
   // A restored framing (initialView) replaces only the first fit of the mount;
   // every later refit trigger behaves as before.
+  //
+  // A *resize* is deliberately not a refit trigger. Re-fitting on resize threw
+  // away the user's pan/zoom, and worse, it moved the screen<->world mapping out
+  // from under a gesture already in flight: grabbing a control point selects it,
+  // which on a narrow pane wraps the pane header onto a second row, which shrinks
+  // the canvas, which re-fitted — so the held point teleported and every
+  // subsequent move wrote the wrong position. That made control points unusable
+  // on phones. A resize now carries the framing over instead, and while a gesture
+  // is in flight the viewport is left untouched entirely so the grabbed handle
+  // stays pinned under the pointer.
   const initialViewApplied = useRef(false);
+  // The canvas size and target set the current framing was computed for, so a
+  // resize can be told apart from a retarget. `framedSize` only advances when a
+  // new framing is actually applied — a resize frozen mid-gesture leaves it on the
+  // last applied one so a later carry-over still starts from the right centre.
+  const framedSize = useRef({ w: 0, h: 0 });
+  const framedKey = useRef<string | null>(null);
   useEffect(() => {
     if (!board || size.w === 0) return;
+    const prev = framedSize.current;
+    const resized = prev.w !== 0 && (prev.w !== size.w || prev.h !== size.h);
+    const retargeted = framedKey.current !== key;
+    framedKey.current = key;
+
     if (!initialViewApplied.current) {
       initialViewApplied.current = true;
       if (initialView) {
+        framedSize.current = { w: size.w, h: size.h };
         setVp(viewportFromCenter(initialView, size.w, size.h));
         return;
       }
     }
+
+    if (resized && !retargeted) {
+      // A gesture in flight keeps the mapping frozen outright; carrying the centre
+      // over would still shift it by half the size delta.
+      if (drag.current || pinch.current) return;
+      framedSize.current = { w: size.w, h: size.h };
+      setVp((cur) => (cur ? reframeForSize(cur, prev.w, prev.h, size.w, size.h) : cur));
+      return;
+    }
+
     const all = targets.flatMap((t) => sampleSpline(getTargetSpline(board, t)));
     if (all.length === 0) return;
     let pts = all;
     if (mirrorY) pts = pts.flatMap((p) => [p, { x: p.x, y: -p.y }]);
     if (mirrorX) pts = pts.flatMap((p) => [p, { x: -p.x, y: p.y }]);
+    framedSize.current = { w: size.w, h: size.h };
     setVp(fitToBounds(boundsOf(pts), size.w, size.h));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, board === null, size.w, size.h]);
@@ -639,8 +673,15 @@ export function SplineEditor({
     curveThickness,
   ]);
 
+  // Canvas-local coordinates. While a gesture is in flight the canvas's page
+  // position is pinned to what it was when the gesture started: selecting a point
+  // can change the layout around the canvas (a pane header growing a row pushes it
+  // down without necessarily resizing it), and a rect that moved mid-drag would
+  // silently re-map the pointer and teleport whatever it was holding.
+  const gestureRect = useRef<{ left: number; top: number } | null>(null);
   const localPoint = (e: React.MouseEvent): { x: number; y: number } => {
-    const r = canvasRef.current!.getBoundingClientRect();
+    const pinned = (drag.current || pinch.current) && gestureRect.current;
+    const r = pinned ?? canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
@@ -708,6 +749,8 @@ export function SplineEditor({
       if (!vp || !board) return;
       setMenu(null);
       const p = localPoint(e);
+      // Pin the mapping for whatever gesture this press starts.
+      gestureRect.current = canvasRef.current!.getBoundingClientRect();
 
       // Trace calibration takes precedence over all editing: a click captures a point.
       // Steps that pick points ON THE IMAGE report image-pixel coords; steps that pick
