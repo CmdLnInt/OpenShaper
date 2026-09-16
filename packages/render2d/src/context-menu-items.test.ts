@@ -76,8 +76,8 @@ describe('buildContextMenuItems', () => {
     expect(labels(items)).toEqual([
       'Fair curve',
       'Make corner',
-      'Select right handle point',
-      'Select left handle point',
+      'Select nose handle point',
+      'Select tail handle point',
       'Delete point',
       'Fit view',
     ]);
@@ -105,8 +105,8 @@ describe('buildContextMenuItems', () => {
     expect(labels(items)).toEqual([
       'Fair curve',
       'Make corner',
-      'Select right handle point',
-      'Select left handle point',
+      'Select nose handle point',
+      'Select tail handle point',
       'Delete point',
       'Fit view',
     ]);
@@ -121,9 +121,9 @@ describe('buildContextMenuItems', () => {
     const { store, build } = setup();
     const items = build(worldToScreen(VP, vec2(50, 20)));
 
-    (find(items, 'Select right handle point') as { onSelect: () => void }).onSelect();
+    (find(items, 'Select nose handle point') as { onSelect: () => void }).onSelect();
     expect(store.getState().selection).toMatchObject({ index: 1, kind: 'next' });
-    (find(items, 'Select left handle point') as { onSelect: () => void }).onSelect();
+    (find(items, 'Select tail handle point') as { onSelect: () => void }).onSelect();
     expect(store.getState().selection).toMatchObject({ index: 1, kind: 'prev' });
   });
 
@@ -309,7 +309,11 @@ describe('buildContextMenuItems: rail presets', () => {
     expect(labels(build(onCurve))).toContain('Add point here');
   });
 
-  it('selects cross-section handles by their visual left/right order', () => {
+  it('keeps left/right for cross-sections, and resolves them by position', () => {
+    // Outline and rocker handles are named for the tail and the nose, which stay put
+    // when the pane turns the board nose-up. A cross-section has neither end nearer
+    // the nose — it travels out from the centreline and back — so it keeps the
+    // visual pair, resolved from where the two handles actually sit.
     const { store, build, onHandle } = csSetup();
     const knot = store.getState().board!.crossSections[1]!.spline.knots[1]!;
     expect(knot.tangentToPrev.x).toBeGreaterThan(knot.tangentToNext.x);

@@ -23,6 +23,7 @@ export { handlePoint, hitTest, type Hit, type HandleKind } from './hit';
 export {
   handleKindForVisualSide,
   visualSideForHandleKind,
+  handleSideName,
   type HandleSide,
   type TangentKind,
 } from './handle-side';

@@ -4,7 +4,7 @@ import {
   type BoardState,
   type SplineTarget,
 } from '@openshaper/store';
-import { visualSideForHandleKind } from '@openshaper/render2d';
+import { handleSideName, visualSideForHandleKind } from '@openshaper/render2d';
 import { Button, Input } from '@openshaper/ui';
 import { NumericInput } from './components/numeric-input';
 import {
@@ -197,9 +197,7 @@ export function SelectedPointEditor({
   const label =
     kind === 'end'
       ? 'Point'
-      : visualSideForHandleKind(knot, selection.target, kind) === 'left'
-        ? 'Left handle'
-        : 'Right handle';
+      : `${handleSideName(selection.target, visualSideForHandleKind(knot, selection.target, kind))} handle`;
   const commit = (x: number, y: number) => {
     if (kind === 'end')
       store.getState().moveControlPoint(selection.target, selection.index, { x, y });

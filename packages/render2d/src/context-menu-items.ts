@@ -9,7 +9,7 @@ import {
 import { getTargetSpline, type BoardState, type SplineTarget } from '@openshaper/store';
 import type { MenuItem } from '@openshaper/ui';
 import type { StoreApi } from 'zustand/vanilla';
-import { handleKindForVisualSide } from './handle-side';
+import { handleKindForVisualSide, handleSideName } from './handle-side';
 import { hitTest } from './hit';
 import type { SectionMarker } from './draw';
 import { screenToWorld, type ScreenPoint, type Viewport } from './viewport';
@@ -191,13 +191,13 @@ export function buildContextMenuItems(req: ContextMenuRequest): MenuItem[] {
       },
       {
         kind: 'action',
-        label: 'Select right handle point',
+        label: `Select ${handleSideName(target, 'right').toLowerCase()} handle point`,
         onSelect: () =>
           store.getState().select({ target, index: hit.index, kind: rightHandleKind }),
       },
       {
         kind: 'action',
-        label: 'Select left handle point',
+        label: `Select ${handleSideName(target, 'left').toLowerCase()} handle point`,
         onSelect: () => store.getState().select({ target, index: hit.index, kind: leftHandleKind }),
       },
       {

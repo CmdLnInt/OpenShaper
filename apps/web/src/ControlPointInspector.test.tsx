@@ -306,7 +306,10 @@ describe('<SelectedPointEditor />', () => {
       />,
     );
 
-    expect(screen.getByLabelText(/Right handle position editor/i)).toBeTruthy();
+    // An outline handle is named for the end of the board it points at, not for
+    // where it happens to be drawn — the pane turns the board nose-up on a phone,
+    // and "right" would then be pointing at something above.
+    expect(screen.getByLabelText(/Nose handle position editor/i)).toBeTruthy();
     expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
   });
 

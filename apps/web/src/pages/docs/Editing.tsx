@@ -99,9 +99,12 @@ export default function DocsEditing() {
         </p>
         <p>
           Right-click a control point to fair its local curve, switch between smooth and corner,
-          select either tangent, or delete it. Right-click a tangent to collapse it to zero length;
-          a selected collapsed tangent can be right-clicked again and extended so it is easy to
-          grab. On a touch screen, press and hold in place for the same menu — holding still is what
+          select either tangent, or delete it. On the outline and rocker the two tangents are named
+          for the end of the board they point at — tail and nose — so the labels still read true
+          when a phone draws the board nose-up. A cross-section has neither end nearer the nose, so
+          its handles stay left and right. Right-click a tangent to collapse it to zero length; a
+          selected collapsed tangent can be right-clicked again and extended so it is easy to grab.
+          On a touch screen, press and hold in place for the same menu — holding still is what
           distinguishes it from a drag, so it will not interrupt one you have started.
         </p>
         <p>
