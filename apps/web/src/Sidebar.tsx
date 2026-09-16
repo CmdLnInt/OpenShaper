@@ -70,7 +70,7 @@ function HistoryPanel() {
               key={index}
               type="button"
               title="Revert to before this step"
-              className="flex w-full items-center justify-between rounded px-2 py-1 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="flex min-h-8 w-full items-center justify-between rounded px-2 py-1 text-left transition-colors hover:bg-accent hover:text-accent-foreground pointer-coarse:min-h-11"
               onClick={() => boardStore.getState().jumpTo(index)}
             >
               <span>{e.label}</span>

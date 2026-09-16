@@ -19,7 +19,7 @@ import {
   type SectionMarker,
 } from '@openshaper/render2d';
 import type { SplineTarget } from '@openshaper/store';
-import { Button, cn, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
+import { Button, Checkbox, cn, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
 import { useMemo } from 'react';
 import { fmtLen, LENGTH_UNITS, type LengthUnit } from './format';
 import { SelectedPointEditor } from './ControlPointInspector';
@@ -156,7 +156,7 @@ export function OverlayToggle({
 }) {
   return (
     <label className="flex cursor-pointer items-center gap-2">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <Checkbox checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
     </label>
   );

@@ -6,6 +6,7 @@
  * three copies of a length field is three places for the units rule (apps/web/CLAUDE.md)
  * to drift, and it is exactly the rule that must not.
  */
+import { Checkbox } from '@openshaper/ui';
 import { cmToUnitNumber, parseLen, unitDecimals, unitSuffix, type LengthUnit } from './format';
 import { useNumericField } from './use-numeric-field';
 
@@ -42,12 +43,11 @@ export function CheckRow({
         {label}
         {hint ? <span className="block text-xs opacity-70">{hint}</span> : null}
       </span>
-      <input
-        type="checkbox"
+      <Checkbox
         checked={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className={`${hint ? 'mt-0.5 ' : ''}h-4 w-4 shrink-0 cursor-pointer accent-[var(--primary)]`}
+        className={hint ? 'mt-0.5' : undefined}
       />
     </label>
   );

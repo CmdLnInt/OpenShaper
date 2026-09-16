@@ -2,7 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      viewport-fit=cover lets `env(safe-area-inset-*)` resolve to real numbers; without
+      it they are 0, which made the bottom sheet's home-indicator padding a no-op on
+      every notched phone since it was written.
+      interactive-widget=resizes-content makes the on-screen keyboard shrink the
+      viewport instead of covering it, so a focused field is never left underneath it.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="theme-color" content="#0A1424" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />

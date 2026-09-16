@@ -15,7 +15,7 @@ import {
   totalPieces,
 } from '@openshaper/export';
 import type { BezierBoard } from '@openshaper/kernel';
-import { Button, Input, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
+import { Button, Checkbox, Input, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { downloadTemplateSheet, slugifyName, type TemplateFormat } from './file-io';
 import { track } from './analytics';
@@ -840,7 +840,7 @@ function Toggle({
   return (
     <label className="flex items-center justify-between gap-2">
       <span className="text-muted-foreground">{label}</span>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <Checkbox checked={checked} onChange={(e) => onChange(e.target.checked)} />
     </label>
   );
 }
