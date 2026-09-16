@@ -104,6 +104,7 @@ import {
   FALLBACK_VIEW,
   isViewAvailable,
   ThreeDControls,
+  UnitSelect,
   ViewPaneHeader,
   type EditorKind,
   type View,
@@ -1146,6 +1147,7 @@ function AppShell() {
       setOverlayToggles={setOverlayToggles}
       ghost={!!ghost}
       ghostSpecs={ghostSpecs}
+      onUnitChange={isPhone ? setUnitKey : undefined}
     />
   );
 
@@ -1229,18 +1231,10 @@ function AppShell() {
               <Fragment key={v.view}>{tab(v.view, v.tabLabel)}</Fragment>
             ))}
           </div>
-          <select
-            value={unitKey}
-            onChange={(e) => setUnitKey(e.target.value)}
-            title="Display units"
-            className="h-8 shrink-0 rounded-md border border-border bg-card px-2 text-sm text-card-foreground [&>option]:bg-card [&>option]:text-card-foreground"
-          >
-            {LENGTH_UNITS.map((u) => (
-              <option key={u.key} value={u.key}>
-                {u.label}
-              </option>
-            ))}
-          </select>
+          {/* On a phone this row has no room for it — it moves into the sheet,
+              where the current unit stays visible next to the dimensions it
+              formats. See `UnitSelect`. */}
+          {!isPhone && <UnitSelect value={unitKey} onChange={setUnitKey} />}
           {/* Below lg the sidebar lives in a bottom sheet; this opens it. */}
           <Button
             size="sm"

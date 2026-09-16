@@ -21,7 +21,7 @@ import {
 import type { SplineTarget } from '@openshaper/store';
 import { Button, cn, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
 import { useMemo } from 'react';
-import { fmtLen, type LengthUnit } from './format';
+import { fmtLen, LENGTH_UNITS, type LengthUnit } from './format';
 import { SelectedPointEditor } from './ControlPointInspector';
 import { boardStore } from './store';
 import type { EditorSettings } from './settings';
@@ -75,6 +75,44 @@ export function SpecRow({ label, value }: { label: string; value: string }) {
       <span className="text-muted-foreground">{label}</span>
       <span className="tabular-nums">{value}</span>
     </div>
+  );
+}
+
+/**
+ * The display-unit picker.
+ *
+ * Lives in the toolbar on wide layouts and in the bottom sheet on the phone tier,
+ * where the toolbar row has no room for it — at 360px the four view tabs plus this
+ * plus the panels button come to ~411px, and because this is `shrink-0` the tab
+ * strip absorbed the overflow and pushed a whole view off-screen. One component
+ * either way, so a phone does not silently get a smaller control.
+ */
+export function UnitSelect({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (key: string) => void;
+  className?: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      title="Display units"
+      aria-label="Display units"
+      className={cn(
+        'h-8 shrink-0 rounded-md border border-border bg-card px-2 text-sm text-card-foreground [&>option]:bg-card [&>option]:text-card-foreground',
+        className,
+      )}
+    >
+      {LENGTH_UNITS.map((u) => (
+        <option key={u.key} value={u.key}>
+          {u.label}
+        </option>
+      ))}
+    </select>
   );
 }
 

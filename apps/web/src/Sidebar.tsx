@@ -25,7 +25,7 @@ import { fmtDimsHeadline, fmtLen, fmtVol, parseLen, type LengthUnit } from './fo
 import type { TraceView, UseTrace } from './use-trace';
 import { FinPanel } from './FinPanel';
 import { boardStore } from './store';
-import { OverlayToggle, Sel, SpecRow } from './view-toolkit';
+import { OverlayToggle, Sel, SpecRow, UnitSelect } from './view-toolkit';
 import {
   fmtWeight,
   FOAM_TYPES,
@@ -133,6 +133,12 @@ export interface SidebarProps {
 
   ghost: boolean;
   ghostSpecs: BoardSpecs | null;
+
+  /**
+   * Change the display unit. Supplied only when the toolbar has no room for the
+   * picker (the phone tier), so exactly one of the two is ever mounted.
+   */
+  onUnitChange?: (key: string) => void;
 }
 
 export function Sidebar({
@@ -153,6 +159,7 @@ export function Sidebar({
   setOverlayToggles,
   ghost,
   ghostSpecs,
+  onUnitChange,
 }: SidebarProps) {
   // Brief confirmation after copying the dimensions headline; resets itself.
   const [copied, setCopied] = useState(false);
@@ -164,6 +171,17 @@ export function Sidebar({
 
   return (
     <div className="flex w-full min-h-0 shrink-0 flex-col gap-3 overflow-y-auto pr-0.5 lg:w-72">
+      {/* First, deliberately: the sheet opens at `half` and everything past Specs
+          is already below the fold there, so a control banished from the toolbar
+          must not land somewhere worse than where it came from. */}
+      {onUnitChange && (
+        <Panel>
+          <PanelBody className="flex items-center justify-between gap-3 py-2 text-sm">
+            <span className="text-muted-foreground">Display units</span>
+            <UnitSelect value={units.key} onChange={onUnitChange} />
+          </PanelBody>
+        </Panel>
+      )}
       <Panel>
         <PanelHeader>
           <PanelTitle>Specs</PanelTitle>
