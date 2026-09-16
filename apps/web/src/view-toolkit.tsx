@@ -19,7 +19,16 @@ import {
   type SectionMarker,
 } from '@openshaper/render2d';
 import type { SplineTarget } from '@openshaper/store';
-import { Button, Checkbox, cn, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
+import {
+  Button,
+  Checkbox,
+  cn,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTitle,
+  Select,
+} from '@openshaper/ui';
 import { useMemo } from 'react';
 import { fmtLen, LENGTH_UNITS, type LengthUnit } from './format';
 import { SelectedPointEditor } from './ControlPointInspector';
@@ -63,11 +72,6 @@ export function ViewPaneHeader({ className, ...props }: React.ComponentProps<typ
 
 // --- small atoms -----------------------------------------------------------
 
-// bg-card + text-foreground (not transparent) so both the closed control and the
-// native option popup are legible on the dark theme — the popup inherits these.
-const SELECT_CLASS =
-  'h-7 rounded border border-border bg-card px-1 text-xs text-foreground [&>option]:bg-card [&>option]:text-foreground';
-
 /** A label/value row used throughout the spec + weight panels. */
 export function SpecRow({ label, value }: { label: string; value: string }) {
   return (
@@ -97,13 +101,15 @@ export function UnitSelect({
   className?: string;
 }) {
   return (
-    <select
+    <Select
       value={value}
       onChange={(e) => onChange(e.target.value)}
       title="Display units"
       aria-label="Display units"
+      // The raised-panel palette rather than the primitive's `bg-background`: this
+      // one sits on the toolbar, where the page colour would make it disappear.
       className={cn(
-        'h-8 shrink-0 rounded-md border border-border bg-card px-2 text-sm text-card-foreground [&>option]:bg-card [&>option]:text-card-foreground',
+        'shrink-0 bg-card text-card-foreground [&>option]:bg-card [&>option]:text-card-foreground',
         className,
       )}
     >
@@ -112,7 +118,7 @@ export function UnitSelect({
           {u.label}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 
@@ -129,18 +135,20 @@ export function Sel<T extends string>({
   title: string;
 }) {
   return (
-    <select
+    <Select
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
       title={title}
-      className={SELECT_CLASS}
+      // Denser than the default with a mouse; the coarse-pointer size survives the
+      // merge, so a fingertip still gets the full 44px.
+      className="h-7 px-1 text-xs"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 

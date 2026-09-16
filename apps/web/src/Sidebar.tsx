@@ -7,7 +7,16 @@
  */
 import type { InterpolationType } from '@openshaper/kernel';
 import type { BoardSpecs } from '@openshaper/store';
-import { Button, Input, Panel, PanelBody, PanelHeader, PanelTitle, Tooltip } from '@openshaper/ui';
+import {
+  Button,
+  Input,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTitle,
+  Textarea,
+  Tooltip,
+} from '@openshaper/ui';
 import { Check, Copy } from 'lucide-react';
 import {
   useEffect,
@@ -327,12 +336,12 @@ export function Sidebar({
               />
             </label>
           ))}
-          <textarea
+          <Textarea
             value={meta.comments ?? ''}
             placeholder="Comments…"
             onChange={(e) => setMeta((m) => ({ ...m, comments: e.target.value }))}
             rows={2}
-            className="w-full resize-none rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+            className="resize-none"
           />
         </PanelBody>
       </Panel>

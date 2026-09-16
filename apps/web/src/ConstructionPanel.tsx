@@ -15,7 +15,16 @@ import {
   totalPieces,
 } from '@openshaper/export';
 import type { BezierBoard } from '@openshaper/kernel';
-import { Button, Checkbox, Input, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
+import {
+  Button,
+  Checkbox,
+  Input,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTitle,
+  Select,
+} from '@openshaper/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { downloadTemplateSheet, slugifyName, type TemplateFormat } from './file-io';
 import { track } from './analytics';
@@ -251,15 +260,14 @@ export function ConstructionPanel({
             <Group title="Ribs">
               <label className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Placement</span>
-                <select
-                  className="h-8 rounded border border-border bg-background px-2"
+                <Select
                   value={p.ribMode}
                   onChange={(e) => set('ribMode', e.target.value as HwsParams['ribMode'])}
                 >
                   <option value="crossSections">From cross-sections</option>
                   <option value="spacing">By spacing</option>
                   <option value="evenCount">Even count</option>
-                </select>
+                </Select>
               </label>
               {p.ribMode === 'spacing' && (
                 <NumField
@@ -290,8 +298,7 @@ export function ConstructionPanel({
             <Group title="Rail band">
               <label className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Lamination</span>
-                <select
-                  className="h-8 rounded border border-border bg-background px-2"
+                <Select
                   value={p.railLamination}
                   onChange={(e) =>
                     set('railLamination', e.target.value as HwsParams['railLamination'])
@@ -299,7 +306,7 @@ export function ConstructionPanel({
                 >
                   <option value="vertical">Vertical strips</option>
                   <option value="horizontal">Horizontal layers</option>
-                </select>
+                </Select>
               </label>
               {p.railLamination === 'vertical' ? (
                 <>
@@ -345,14 +352,13 @@ export function ConstructionPanel({
                 <>
                   <label className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Rib joint</span>
-                    <select
-                      className="h-8 rounded border border-border bg-background px-2"
+                    <Select
                       value={p.railJoint}
                       onChange={(e) => set('railJoint', e.target.value as HwsParams['railJoint'])}
                     >
                       <option value="butt">Butt + reference lines</option>
                       <option value="tabSlot">Tab + slot</option>
-                    </select>
+                    </Select>
                   </label>
                   <NumField
                     label="Tail trim"
@@ -397,8 +403,7 @@ export function ConstructionPanel({
             <Group title="Lightening">
               <label className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Style</span>
-                <select
-                  className="h-8 rounded border border-border bg-background px-2"
+                <Select
                   value={p.lighteningStyle}
                   onChange={(e) =>
                     set('lighteningStyle', e.target.value as HwsParams['lighteningStyle'])
@@ -408,7 +413,7 @@ export function ConstructionPanel({
                   <option value="truss">Truss web</option>
                   <option value="pocket">Pocket (filleted)</option>
                   <option value="circles">Circular holes</option>
-                </select>
+                </Select>
               </label>
               {p.lighteningStyle !== 'none' && (
                 <NumField
@@ -554,18 +559,14 @@ export function ConstructionPanel({
             <Group title="Print (PDF)">
               <label className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Paper</span>
-                <select
-                  className="h-8 rounded border border-border bg-background px-2"
-                  value={output.paperId}
-                  onChange={(e) => setOut('paperId', e.target.value)}
-                >
+                <Select value={output.paperId} onChange={(e) => setOut('paperId', e.target.value)}>
                   <option value="plot">One page per part (plot)</option>
                   {PAPER_SIZES.map((ps) => (
                     <option key={ps.id} value={ps.id}>
                       Tile to {ps.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               {output.paperId !== 'plot' && (
                 <NumField
