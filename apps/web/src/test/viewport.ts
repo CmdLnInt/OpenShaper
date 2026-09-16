@@ -6,10 +6,10 @@
  * all exercising the middle tier by accident rather than by intent, and a test
  * could not ask for a phone at all.
  *
- * This evaluates the only forms the app uses — min/max width and height, and
- * comma-separated lists of them — against a viewport the test sets. It is not a
- * media-query engine: anything else it does not understand evaluates to false,
- * loudly enough to notice because the layout will be wrong.
+ * This evaluates the forms the app uses — min/max width and height, orientation,
+ * and comma-separated lists of them — against a viewport the test sets. It is not
+ * a media-query engine: any other feature evaluates to false, loudly enough to
+ * notice because the layout will be wrong.
  */
 
 // Tablet portrait: neither desktop (≥1024 wide) nor phone. jsdom's `false`-to-
@@ -21,20 +21,36 @@ const DEFAULT = { width: 834, height: 1112 };
 let viewport = { ...DEFAULT };
 const listeners = new Set<() => void>();
 
-const FEATURE = /\(\s*(min|max)-(width|height)\s*:\s*(\d+(?:\.\d+)?)px\s*\)/g;
+const SIZE = /\(\s*(min|max)-(width|height)\s*:\s*(\d+(?:\.\d+)?)px\s*\)/;
+const ORIENTATION = /\(\s*orientation\s*:\s*(portrait|landscape)\s*\)/;
+/** Any parenthesised feature, so an unrecognised one can be told from none at all. */
+const ANY_FEATURE = /\([^)]*\)/g;
+
+/** Evaluate a single `(feature: value)` against the current viewport. */
+function feature(text: string): boolean {
+  const size = SIZE.exec(text);
+  if (size) {
+    const [, bound, axis, raw] = size;
+    const value = axis === 'width' ? viewport.width : viewport.height;
+    return bound === 'min' ? value >= Number(raw) : value <= Number(raw);
+  }
+  const orientation = ORIENTATION.exec(text);
+  if (orientation) {
+    // CSS calls a square viewport portrait.
+    const portrait = viewport.height >= viewport.width;
+    return orientation[1] === 'portrait' ? portrait : !portrait;
+  }
+  return false;
+}
 
 /** Evaluate one comma-separated media query list against the current viewport. */
 function evaluate(query: string): boolean {
   // A query list matches if ANY of its comma-separated queries matches; each
   // query matches only if ALL of its features do.
   return query.split(',').some((part) => {
-    const features = [...part.matchAll(FEATURE)];
-    if (features.length === 0) return false;
-    return features.every(([, bound, axis, raw]) => {
-      const value = axis === 'width' ? viewport.width : viewport.height;
-      const limit = Number(raw);
-      return bound === 'min' ? value >= limit : value <= limit;
-    });
+    const features = part.match(ANY_FEATURE);
+    if (!features) return false;
+    return features.every(feature);
   });
 }
 

@@ -85,6 +85,7 @@ import { ConstructionPanel } from './ConstructionPanel';
 import { SettingsDialog } from './SettingsDialog';
 import { loadSettings, saveSettings, type EditorSettings } from './settings';
 import { CrossSectionControls } from './CrossSectionControls';
+import { LandscapeHint } from './LandscapeHint';
 import { CoffeeIcon } from './components/Support';
 import { Sidebar, type OverlayToggles, type ResizeFields } from './Sidebar';
 import sampleBrd from './sample-board.brd?raw';
@@ -1247,6 +1248,8 @@ function AppShell() {
             <SlidersHorizontal className="size-4" />
           </Button>
         </div>
+
+        <LandscapeHint />
 
         {/* Hidden file inputs. The trace input is shared by the File menu + Sidebar,
             targeting whichever view `openTracePicker` last set on `pendingTraceView`. */}
