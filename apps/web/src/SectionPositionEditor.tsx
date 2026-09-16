@@ -65,9 +65,19 @@ export function SectionPositionEditor({
           }}
           onCommit={commit}
           onEscape={() => onDismiss?.()}
-          className="h-7 w-20 rounded-r-none px-2 text-xs tabular-nums pointer-coarse:h-9"
+          className="h-7 w-20 rounded-r-none px-2 text-xs tabular-nums pointer-coarse:h-12"
         />
-        <div className="flex h-7 w-5 flex-col overflow-hidden rounded-r-md border border-l-0 border-input bg-background pointer-coarse:h-9">
+        {/*
+          Two stacked steppers cannot both reach the 44px ergonomic floor: that
+          would be an 88px column in a pane header with 40px of content space. 48px
+          splits into two 24px halves, which is the WCAG 2.5.8 minimum, and the
+          field beside them is the 44px path to the same value for anyone who
+          misses. 50px rather than 48 because the 1px divider comes out of the
+          split, which would otherwise leave the lower half at 23. At 36px wide
+          rather than 20px they are also no longer the narrowest target in the
+          editor.
+        */}
+        <div className="flex h-7 w-5 flex-col overflow-hidden rounded-r-md border border-l-0 border-input bg-background pointer-coarse:h-[3.125rem] pointer-coarse:w-9">
           <button
             type="button"
             aria-label="Increase slice position"
@@ -75,7 +85,7 @@ export function SectionPositionEditor({
             className="flex min-h-0 flex-1 items-center justify-center border-b border-input hover:bg-accent hover:text-accent-foreground"
             onClick={() => step(1)}
           >
-            <ChevronUp className="size-3" />
+            <ChevronUp className="size-3 pointer-coarse:size-4" />
           </button>
           <button
             type="button"
@@ -84,7 +94,7 @@ export function SectionPositionEditor({
             className="flex min-h-0 flex-1 items-center justify-center hover:bg-accent hover:text-accent-foreground"
             onClick={() => step(-1)}
           >
-            <ChevronDown className="size-3" />
+            <ChevronDown className="size-3 pointer-coarse:size-4" />
           </button>
         </div>
       </div>

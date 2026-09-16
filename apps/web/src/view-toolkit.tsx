@@ -65,9 +65,16 @@ export const FALLBACK_VIEW: View = 'outline';
 export { faceSizeFor } from './view3d-settings';
 export type { MeshQuality, View3DSettings } from './view3d-settings';
 
-/** A stable header shared by every 2D and 3D editor pane. */
+/**
+ * A stable header shared by every 2D and 3D editor pane.
+ *
+ * `PanelHeader`'s `px-4` becomes `px-2` on a coarse pointer. 16px of gutter is
+ * cheap on a desktop and expensive on a phone: the cross-section cluster needs
+ * every pixel of a 360px row once its controls are at the touch floor, and the
+ * pane title beside it is already truncating to nothing at that width.
+ */
 export function ViewPaneHeader({ className, ...props }: React.ComponentProps<typeof PanelHeader>) {
-  return <PanelHeader className={cn('min-h-14', className)} {...props} />;
+  return <PanelHeader className={cn('min-h-14 pointer-coarse:px-2', className)} {...props} />;
 }
 
 // --- small atoms -----------------------------------------------------------
@@ -162,8 +169,11 @@ export function OverlayToggle({
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
+  // The floor lives on the label, not the box: a native checkbox cannot be grown
+  // with padding, and a 44px one would look broken. The whole row is clickable, so
+  // that is the target worth measuring.
   return (
-    <label className="flex cursor-pointer items-center gap-2">
+    <label className="flex cursor-pointer items-center gap-2 pointer-coarse:min-h-11">
       <Checkbox checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
     </label>

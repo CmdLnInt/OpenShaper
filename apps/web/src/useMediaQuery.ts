@@ -67,6 +67,19 @@ export function useIsShortViewport(): boolean {
   return useMediaQuery(SHORT_VIEWPORT);
 }
 
+/**
+ * True where the primary input is a finger or a stylus rather than a mouse.
+ *
+ * This is the same condition Tailwind's `pointer-coarse:` variant tests, so UI that
+ * has to *restructure* for touch flips together with the sizing that grows for it.
+ * It is deliberately not a size tier: a tablet is a large coarse viewport and a
+ * narrow desktop window is a small fine one, and 44px targets are owed to the first
+ * and not the second.
+ */
+export function useIsCoarsePointer(): boolean {
+  return useMediaQuery('(pointer: coarse)');
+}
+
 /** The same query, for a `useState` initialiser that cannot call a hook. */
 export function isShortViewport(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false;

@@ -202,7 +202,7 @@ export function Sidebar({
                 <button
                   type="button"
                   aria-label="Copy dimensions"
-                  className="flex w-full items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-left hover:bg-muted"
+                  className="flex w-full items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-left hover:bg-muted pointer-coarse:min-h-11"
                   onClick={() => {
                     const text = fmtDimsHeadline(
                       specs.length,

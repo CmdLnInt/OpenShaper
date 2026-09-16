@@ -13,13 +13,15 @@ export const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
       },
-      // Coarse pointers (touch) get a slightly taller hit area for comfortable tapping
-      // without enlarging the dense mouse/keyboard UI.
+      // Coarse pointers (touch) get 44px in both axes — Apple's ergonomic floor, and
+      // comfortably clear of the 24px WCAG 2.5.8 minimum — without enlarging the dense
+      // mouse/keyboard UI. `min-w` rather than `w` so a wide button keeps its width
+      // and only a narrow one (an icon, or a two-character label like "3D") grows.
       size: {
-        default: 'h-9 px-4 py-2 pointer-coarse:h-10',
-        sm: 'h-8 rounded-md px-3 text-xs pointer-coarse:h-9',
-        lg: 'h-10 rounded-md px-6',
-        icon: 'h-9 w-9 pointer-coarse:size-10',
+        default: 'h-9 px-4 py-2 pointer-coarse:h-11',
+        sm: 'h-8 rounded-md px-3 text-xs pointer-coarse:h-11 pointer-coarse:min-w-11',
+        lg: 'h-10 rounded-md px-6 pointer-coarse:h-11',
+        icon: 'h-9 w-9 pointer-coarse:size-11',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

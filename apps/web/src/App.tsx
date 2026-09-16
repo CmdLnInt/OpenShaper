@@ -1204,7 +1204,7 @@ function AppShell() {
         <div className="flex h-11 shrink-0 items-center gap-1 px-1.5 sm:gap-2 sm:px-2">
           <a
             href="/"
-            className="group flex items-center gap-2 px-1.5 font-semibold transition-colors hover:text-primary"
+            className="group flex items-center gap-2 px-1.5 font-semibold transition-colors hover:text-primary pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
             title="OpenShaper home"
           >
             <Brandmark className="h-6 w-6 transition-transform duration-300 group-hover:rotate-3" />
