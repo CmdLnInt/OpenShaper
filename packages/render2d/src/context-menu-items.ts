@@ -32,6 +32,12 @@ export interface ContextMenuRequest {
   vp: Viewport;
   /** Click position in canvas-local pixels (same space `hitTest` expects). */
   screen: ScreenPoint;
+  /**
+   * Hit radius in px. Defaults to the mouse figure; a long-press must pass the
+   * touch one, or "long-press for the menu" has a smaller target than "drag" and
+   * a point you can grab offers you the empty-canvas menu instead.
+   */
+  tolPx?: number;
   mirrorY: boolean;
   mirrorX: boolean;
   store: StoreApi<BoardState>;
@@ -147,7 +153,7 @@ export function buildContextMenuItems(req: ContextMenuRequest): MenuItem[] {
       selected && sameTarget(selected.target, target)
         ? { index: selected.index, kind: selected.kind ?? ('end' as const) }
         : undefined;
-    const hit = hitTest(spline, vp, screen, 8, preferred);
+    const hit = hitTest(spline, vp, screen, req.tolPx ?? 8, preferred);
     if (!hit) continue;
     const knot = spline.knots[hit.index]!;
 

@@ -85,13 +85,15 @@ export default function DocsEditing() {
         </p>
         <p>
           Press <code>{shortcutKeys('cross-section-blur')}</code> to clear a selected point or
-          tangent handle.
+          tangent handle. On a touch screen, tapping empty canvas does the same — it also releases a
+          focused station.
         </p>
         <p>
           Right-click a control point to fair its local curve, switch between smooth and corner,
           select either tangent, or delete it. Right-click a tangent to collapse it to zero length;
           a selected collapsed tangent can be right-clicked again and extended so it is easy to
-          grab.
+          grab. On a touch screen, press and hold in place for the same menu — holding still is what
+          distinguishes it from a drag, so it will not interrupt one you have started.
         </p>
         <p>
           Press <code>{shortcutKeys('delete-point')}</code> to remove the selected point. The curve

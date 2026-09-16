@@ -241,7 +241,24 @@ const TRACE_HANDLE_R = 9;
 const HIT_TOL_PX = 8;
 const TOUCH_HIT_TOL_PX = 14;
 
+/**
+ * Travel (px) past which a press is a drag rather than a tap.
+ *
+ * Two different questions share this number and they want different answers, so it
+ * is only the mouse one: did a right-button press become a pan?
+ */
 const TAP_SLOP = 4;
+
+/**
+ * Travel (px) past which a *finger* resting on empty canvas counts as having moved.
+ *
+ * Larger than {@link TAP_SLOP} because a fingertip's contact centroid wanders a few
+ * pixels while the hand believes it is holding still, so a mouse-sized budget makes a
+ * deliberate long-press on blank canvas fail at random. Generous is safe here —
+ * nothing is at stake on empty canvas, and the only cost of waiting is the menu
+ * opening a moment later.
+ */
+const TOUCH_STILL_SLOP = 10;
 
 /** Hold time (ms) for a single-finger touch to open the context menu (right-click stand-in). */
 const LONG_PRESS_MS = 500;
@@ -831,7 +848,10 @@ export function SplineEditor({
           drag.current = null;
           const marker = sectionMarkerAt(p);
           if (marker) onPickSection?.(marker.index);
-          const picked = marker ? null : hitAny(p);
+          // The touch radius, not the mouse one: this path is only ever reached by a
+          // finger, and picking a point up to drag it used to have a target nearly
+          // twice the size of long-pressing the same point for its menu.
+          const picked = marker ? null : hitAny(p, TOUCH_HIT_TOL_PX);
           if (picked)
             store
               .getState()
@@ -841,6 +861,7 @@ export function SplineEditor({
             targets,
             vp,
             screen: p,
+            tolPx: TOUCH_HIT_TOL_PX,
             mirrorX,
             mirrorY,
             store,
@@ -1014,10 +1035,27 @@ export function SplineEditor({
           pinch.current = { dist: nd, cx: ncx, cy: ncy };
           return;
         }
-        // One finger that travels past the tap slop is a drag, not a long-press.
+        // One finger that has moved is a drag, not a long-press — but how far it has
+        // to move depends entirely on what it is holding.
+        //
+        // With a live edit underway the answer is "at all". This is the gesture that
+        // made fine adjustment impossible on a phone: press a control point, nudge it
+        // a couple of pixels, hold for half a second to check the line, and the timer
+        // fired — `endEdit()` cut the drag dead and dropped a menu over the board
+        // while the finger was still on the point. A mouse-sized 4px budget could not
+        // catch it, because at a phone's ~1.5px/cm a deliberate 1cm nudge is under two
+        // pixels. Anything the user can see is a drag.
+        //
+        // With nothing under the finger there is no drag to protect, so the finger's
+        // own noise floor is the right threshold instead.
+        const dragging =
+          drag.current?.mode === 'edit' ||
+          drag.current?.mode === 'fin' ||
+          drag.current?.mode === 'section';
         if (
           longPress.current &&
-          Math.hypot(p.x - longPress.current.x, p.y - longPress.current.y) > TAP_SLOP
+          Math.hypot(p.x - longPress.current.x, p.y - longPress.current.y) >
+            (dragging ? 0 : TOUCH_STILL_SLOP)
         ) {
           cancelLongPress();
         }

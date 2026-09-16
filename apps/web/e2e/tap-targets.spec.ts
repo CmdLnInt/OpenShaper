@@ -30,12 +30,24 @@ const FLOOR = 44;
 const HARD_FLOOR = 24;
 
 interface Allowed {
-  /** Matched against the element's accessible name. */
-  name: RegExp;
+  /** Matched against the element's accessible name, when it has one. */
+  name?: RegExp;
+  /**
+   * Matched against `tag`, e.g. `input[checkbox]`.
+   *
+   * An exception for a control with no accessible name has to key off this. Keying
+   * off the empty name instead exempts *every* unnamed control in the app, which is
+   * the opposite of an allowlist — it let four 32px number fields through while the
+   * entry meant only to cover native checkboxes.
+   */
+  tag?: RegExp;
   /** The lower bound this control is held to instead of {@link FLOOR}. */
   floor: number;
   why: string;
 }
+
+const matches = (a: Allowed, t: Target): boolean =>
+  (a.name?.test(t.name) ?? true) && (a.tag?.test(t.tag) ?? true) && (!!a.name || !!a.tag);
 
 const ALLOWLIST: Allowed[] = [
   {
@@ -49,7 +61,7 @@ const ALLOWLIST: Allowed[] = [
     why: 'An inline link inside a sentence. WCAG 2.5.8 exempts targets whose size is constrained by the line box, and padding one out would break the paragraph it sits in.',
   },
   {
-    name: /^$/,
+    tag: /^input\[checkbox\]$/,
     floor: HARD_FLOOR,
     why: 'Native checkboxes. The box cannot be grown with padding — it IS the control — so the floor lives on the wrapping label, which is the whole clickable row.',
   },
@@ -87,7 +99,7 @@ async function targets(page: Page): Promise<Target[]> {
   });
 }
 
-const floorFor = (t: Target): number => ALLOWLIST.find((a) => a.name.test(t.name))?.floor ?? FLOOR;
+const floorFor = (t: Target): number => ALLOWLIST.find((a) => matches(a, t))?.floor ?? FLOOR;
 
 const describeTarget = (t: Target) => `${t.w}x${t.h} ${t.tag} "${t.name || '(unnamed)'}"`;
 
@@ -140,6 +152,30 @@ test.describe('touch targets on a phone', () => {
     ).toBe(true);
     expect(undersized(all), 'sheet at half: under the touch floor').toEqual([]);
     expect(offscreen(all), 'sheet at half: rendered off the edge of the screen').toEqual([]);
+  });
+
+  test('meet the floor inside a dialog, where the form fields live', async ({ page }) => {
+    // The dialogs are where nearly every numeric field in the app actually is, and
+    // they render over the editor rather than inside it — so the two checks above,
+    // which only ever saw the landing screen and the sheet, could not reach them.
+    // Three of those fields were still raw `<input>` elements with hand-rolled
+    // `h-8 ... text-sm` classes, i.e. 32px and below the iOS zoom threshold.
+    await page.goto('/app');
+    await editorReady(page);
+    await page.getByRole('button', { name: 'Menu and commands' }).click();
+    // Rail bands is the dialog that actually renders the shared numeric atoms
+    // (`IntField`, `LenField`) — a dozen of them. Picking a dialog without them
+    // would make this case pass on an empty form.
+    await page.getByText('Export: Rail bands…', { exact: true }).click();
+    await page.waitForTimeout(400);
+
+    const all = await targets(page);
+    const fields = all.filter((t) => t.tag.startsWith('input[number]'));
+    expect(
+      fields.length,
+      'the dialog rendered no numeric fields to measure',
+    ).toBeGreaterThanOrEqual(4);
+    expect(undersized(all), 'export dialog: under the touch floor').toEqual([]);
   });
 
   test('do not zoom iOS when a text field takes focus', async ({ page }) => {

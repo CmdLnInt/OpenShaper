@@ -1206,6 +1206,9 @@ function AppShell() {
             href="/"
             className="group flex items-center gap-2 px-1.5 font-semibold transition-colors hover:text-primary pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
             title="OpenShaper home"
+            // The wordmark beside the brandmark is `hidden sm:inline`, so below 640px
+            // this link has no text content at all and `title` was its only name.
+            aria-label="OpenShaper home"
           >
             <Brandmark className="h-6 w-6 transition-transform duration-300 group-hover:rotate-3" />
             {!isShort && (

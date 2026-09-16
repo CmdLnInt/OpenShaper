@@ -541,9 +541,24 @@ function TracePanel({
               </Button>
             </div>
             {trace.calibration && (
-              <p className="text-xs text-muted-foreground">
-                Follow the prompts on the {view} view. Press Esc to cancel.
-              </p>
+              // Escape was the ONLY way out of a calibration: `cancelCalibration` was
+              // exported from the hook and called by nothing, so a phone user who
+              // started one by mistake had to complete all four taps or reload the
+              // page. The button is the escape hatch; the key still works for anyone
+              // who has one.
+              <div className="flex items-center justify-between gap-2">
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  Follow the prompts on the {view} view.
+                </p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="shrink-0"
+                  onClick={trace.cancelCalibration}
+                >
+                  Cancel
+                </Button>
+              </div>
             )}
             {trace.lengthPending && (
               <label className="flex items-center gap-2">

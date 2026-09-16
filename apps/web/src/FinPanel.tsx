@@ -87,6 +87,7 @@ function DegField({
     <label className="flex items-center gap-2">
       <span className="flex-1 text-muted-foreground">{label}</span>
       <NumericInput
+        signed
         value={text}
         onValueChange={setText}
         onCommit={commit}

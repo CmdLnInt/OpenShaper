@@ -6,7 +6,7 @@
  * three copies of a length field is three places for the units rule (apps/web/CLAUDE.md)
  * to drift, and it is exactly the rule that must not.
  */
-import { Checkbox, Select } from '@openshaper/ui';
+import { Checkbox, Input, Select } from '@openshaper/ui';
 import { cmToUnitNumber, parseLen, unitDecimals, unitSuffix, type LengthUnit } from './format';
 import { useNumericField } from './use-numeric-field';
 
@@ -78,12 +78,12 @@ export function LenField({
     <label className={`flex items-center justify-between gap-3 ${disabled ? 'opacity-40' : ''}`}>
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className="flex items-center gap-1">
-        <input
+        <Input
           type="number"
           disabled={disabled}
           step={units.key === 'in' ? 0.0625 : units.key === 'mm' ? 0.5 : 0.1}
           {...field}
-          className="h-8 w-20 rounded border border-border bg-background px-2 text-right text-sm"
+          className="w-20 text-right"
         />
         <span className="w-6 text-xs text-muted-foreground">{unitSuffix(units)}</span>
       </span>
@@ -114,14 +114,7 @@ export function IntField({
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        step={1}
-        {...field}
-        className="h-8 w-20 rounded border border-border bg-background px-2 text-right text-sm"
-      />
+      <Input type="number" min={min} max={max} step={1} {...field} className="w-20 text-right" />
     </label>
   );
 }
