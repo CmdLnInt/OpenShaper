@@ -74,7 +74,7 @@ export function ConsentBanner() {
       role="region"
       aria-label="Analytics consent"
       className={cn(
-        'fixed inset-x-0 bottom-28 z-50 border-t border-border bg-card px-4 py-3 text-card-foreground shadow-lg transition-transform duration-500 ease-out lg:bottom-0',
+        'fixed inset-x-0 bottom-[var(--os-sheet-inset)] z-50 border-t border-border bg-card px-4 py-3 text-card-foreground shadow-lg transition-transform duration-500 ease-out',
         visible ? 'translate-y-0 pointer-events-auto' : 'translate-y-full pointer-events-none',
       )}
     >

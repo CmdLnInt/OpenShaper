@@ -18,7 +18,7 @@ import {
   type FinSpec,
 } from '@openshaper/kernel';
 import type { BoardState } from '@openshaper/store';
-import { Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
+import { Checkbox, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { StoreApi } from 'zustand/vanilla';
 import { NumericInput } from './components/numeric-input';
@@ -87,6 +87,7 @@ function DegField({
     <label className="flex items-center gap-2">
       <span className="flex-1 text-muted-foreground">{label}</span>
       <NumericInput
+        signed
         value={text}
         onValueChange={setText}
         onCommit={commit}
@@ -192,8 +193,7 @@ export function FinPanel({ store, units }: { store: StoreApi<BoardState>; units:
               title="Fin system"
             />
             <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={cfg.symmetrical}
                 onChange={(e) => store.getState().setFinSymmetrical(e.target.checked)}
               />
@@ -205,7 +205,7 @@ export function FinPanel({ store, units }: { store: StoreApi<BoardState>; units:
                   key={i}
                   type="button"
                   onClick={() => store.getState().selectFin(selectedFin === i ? null : i)}
-                  className={`rounded px-2 py-0.5 text-xs ${
+                  className={`flex min-w-8 items-center justify-center rounded px-2 py-0.5 text-xs pointer-coarse:min-h-11 pointer-coarse:min-w-11 ${
                     selectedFin === i
                       ? 'bg-primary text-primary-foreground'
                       : 'border border-border text-muted-foreground'

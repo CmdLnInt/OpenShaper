@@ -42,13 +42,19 @@ export interface Shortcut {
   match: ShortcutMatch;
 }
 
-/** Views reachable by number key, in toolbar order. */
-export const VIEW_KEYS: readonly { key: string; view: View; label: string }[] = [
-  { key: '1', view: 'quad', label: 'Quad view' },
-  { key: '2', view: 'outline', label: 'Outline view' },
-  { key: '3', view: 'rocker', label: 'Rocker view' },
-  { key: '4', view: 'crossSection', label: 'Cross-section view' },
-  { key: '5', view: '3d', label: '3D view' },
+/**
+ * The views, in toolbar order — the single source for both the number keys and
+ * the tab strip. The strip used to repeat this list as five hand-written
+ * buttons, so gating a view by layout tier was two edits with nothing to keep
+ * them honest. `label` names the shortcut on `/docs/shortcuts`; `tabLabel` is
+ * the button.
+ */
+export const VIEW_KEYS: readonly { key: string; view: View; label: string; tabLabel: string }[] = [
+  { key: '1', view: 'quad', label: 'Quad view', tabLabel: 'Quad' },
+  { key: '2', view: 'outline', label: 'Outline view', tabLabel: 'Outline' },
+  { key: '3', view: 'rocker', label: 'Rocker view', tabLabel: 'Rocker' },
+  { key: '4', view: 'crossSection', label: 'Cross-section view', tabLabel: 'Cross-section' },
+  { key: '5', view: '3d', label: '3D view', tabLabel: '3D' },
 ];
 
 export const SHORTCUTS: readonly Shortcut[] = [

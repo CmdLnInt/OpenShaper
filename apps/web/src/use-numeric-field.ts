@@ -28,6 +28,19 @@ export interface NumericFieldBinding {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onFocus: () => void;
   onBlur: () => void;
+  /**
+   * A digits-and-separator keypad rather than whatever `type="number"` alone gets
+   * you, which on Android is often the full keyboard.
+   *
+   * Safe for every field driven by this hook because all of them are non-negative
+   * physical quantities — spacings, thicknesses, margins, counts — and not one of
+   * their `min` values is below zero. A decimal keypad has no minus key, so this
+   * would be the wrong hint for a field that stores a sign; those use
+   * `NumericInput`'s `signed` instead.
+   */
+  inputMode: 'decimal';
+  /** Enter commits, so the key should say so rather than "go" or "search". */
+  enterKeyHint: 'done';
 }
 
 export function useNumericField({
@@ -56,6 +69,8 @@ export function useNumericField({
   }, [shown, focused]);
 
   return {
+    inputMode: 'decimal',
+    enterKeyHint: 'done',
     value: text,
     onChange: (e) => {
       const next = e.target.value;

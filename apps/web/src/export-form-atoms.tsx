@@ -6,6 +6,7 @@
  * three copies of a length field is three places for the units rule (apps/web/CLAUDE.md)
  * to drift, and it is exactly the rule that must not.
  */
+import { Checkbox, Input, Select } from '@openshaper/ui';
 import { cmToUnitNumber, parseLen, unitDecimals, unitSuffix, type LengthUnit } from './format';
 import { useNumericField } from './use-numeric-field';
 
@@ -42,12 +43,11 @@ export function CheckRow({
         {label}
         {hint ? <span className="block text-xs opacity-70">{hint}</span> : null}
       </span>
-      <input
-        type="checkbox"
+      <Checkbox
         checked={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className={`${hint ? 'mt-0.5 ' : ''}h-4 w-4 shrink-0 cursor-pointer accent-[var(--primary)]`}
+        className={hint ? 'mt-0.5' : undefined}
       />
     </label>
   );
@@ -78,12 +78,12 @@ export function LenField({
     <label className={`flex items-center justify-between gap-3 ${disabled ? 'opacity-40' : ''}`}>
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className="flex items-center gap-1">
-        <input
+        <Input
           type="number"
           disabled={disabled}
           step={units.key === 'in' ? 0.0625 : units.key === 'mm' ? 0.5 : 0.1}
           {...field}
-          className="h-8 w-20 rounded border border-border bg-background px-2 text-right text-sm"
+          className="w-20 text-right"
         />
         <span className="w-6 text-xs text-muted-foreground">{unitSuffix(units)}</span>
       </span>
@@ -114,14 +114,7 @@ export function IntField({
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        step={1}
-        {...field}
-        className="h-8 w-20 rounded border border-border bg-background px-2 text-right text-sm"
-      />
+      <Input type="number" min={min} max={max} step={1} {...field} className="w-20 text-right" />
     </label>
   );
 }
@@ -142,18 +135,13 @@ export function SelectRow({
   return (
     <label className={`flex items-center justify-between gap-3 ${disabled ? 'opacity-40' : ''}`}>
       <span className="text-sm text-muted-foreground">{label}</span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-8 rounded border border-border bg-background px-2 text-sm"
-      >
+      <Select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }

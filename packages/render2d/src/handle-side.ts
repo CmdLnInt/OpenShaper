@@ -27,3 +27,29 @@ export const visualSideForHandleKind = (
   target: SplineTarget,
   kind: TangentKind,
 ): HandleSide => (handleKindForVisualSide(knot, target, 'left') === kind ? 'left' : 'right');
+
+/**
+ * What to call a knot's two tangent handles, in this spline's own terms.
+ *
+ * "Left" and "right" described where the handles are *drawn*, which stopped being
+ * true when the board turn started drawing outline and rocker nose-up on a portrait
+ * pane: the "left" handle is then below and the "right" one above. Rather than
+ * thread the orientation into every label, name the handles by the thing they point
+ * at — a board's tail and nose do not move when the pane does, and it is the
+ * language a shaper would use anyway.
+ *
+ * Cross-sections keep left/right: they travel out from the centreline and back, so
+ * neither end is nearer the nose, and they are never turned (a section is already
+ * the shape of its pane). Their side is still resolved from the handles' actual
+ * horizontal positions by {@link handleKindForVisualSide}.
+ */
+export const handleSideName = (target: SplineTarget, side: HandleSide): string =>
+  target.kind === 'crossSection'
+    ? side === 'left'
+      ? 'Left'
+      : 'Right'
+    : // Outline and rocker run tail (x=0) to nose (x=length), and `prev` is the
+      // lower-x neighbour — so the "left" side is the tail side in both layouts.
+      side === 'left'
+      ? 'Tail'
+      : 'Nose';

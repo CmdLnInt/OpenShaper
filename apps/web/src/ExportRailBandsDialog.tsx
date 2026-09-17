@@ -492,7 +492,10 @@ export function ExportRailBandsDialog({
             <div className="rounded border border-border bg-muted/30 p-3">
               <button
                 type="button"
-                className="text-sm font-medium"
+                // A bare text button with no padding is 20px tall. Full width so the
+                // whole row is the target, which is also where a thumb will land.
+                className="flex w-full items-center text-left text-sm font-medium pointer-coarse:min-h-11"
+                aria-expanded={showNotes}
                 onClick={() => setShowNotes((s) => !s)}
               >
                 {notes.length} note{notes.length === 1 ? '' : 's'} on this board{' '}

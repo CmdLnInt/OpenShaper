@@ -3,7 +3,7 @@
  * and curve stroke thickness. Persisted to localStorage via the settings module.
  * Modeled on the ConstructionPanel modal pattern (fixed-inset backdrop, Panel card).
  */
-import { Button, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
+import { Button, Checkbox, Input, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DEFAULT_SETTINGS, type EditorSettings } from './settings';
@@ -61,14 +61,7 @@ function NumberRow({
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        {...field}
-        className="h-8 w-20 rounded border border-border bg-background px-2 text-right text-sm"
-      />
+      <Input type="number" min={min} max={max} step={step} {...field} className="w-20 text-right" />
     </label>
   );
 }
@@ -87,13 +80,7 @@ function CheckboxRow({
   return (
     <label className="flex items-center justify-between gap-3" htmlFor={id}>
       <span className="text-sm text-muted-foreground">{label}</span>
-      <input
-        id={id}
-        type="checkbox"
-        checked={value}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
-      />
+      <Checkbox id={id} checked={value} onChange={(e) => onChange(e.target.checked)} />
     </label>
   );
 }

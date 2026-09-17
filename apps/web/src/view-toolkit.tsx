@@ -19,12 +19,22 @@ import {
   type SectionMarker,
 } from '@openshaper/render2d';
 import type { SplineTarget } from '@openshaper/store';
-import { Button, cn, Panel, PanelBody, PanelHeader, PanelTitle } from '@openshaper/ui';
+import {
+  Button,
+  Checkbox,
+  cn,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTitle,
+  Select,
+} from '@openshaper/ui';
 import { useMemo } from 'react';
-import { fmtLen, type LengthUnit } from './format';
+import { fmtLen, LENGTH_UNITS, type LengthUnit } from './format';
 import { SelectedPointEditor } from './ControlPointInspector';
 import { boardStore } from './store';
 import type { EditorSettings } from './settings';
+import { useIsCoarsePointer } from './useMediaQuery';
 import {
   ANALYSIS_3D,
   LIGHTING_3D,
@@ -37,21 +47,38 @@ import {
 export type EditorKind = 'outline' | 'rocker' | 'crossSection';
 export type View = 'quad' | EditorKind | '3d';
 
+/**
+ * Whether a view is offered at the current layout tier.
+ *
+ * Quad stacks its four panes into a scrolling column below `lg`. On a phone that
+ * is ~1200px of scroll inside a ~740px viewport, and because every canvas sets
+ * `touch-action: none` the column can only be scrolled from the gaps between
+ * panes and the pane headers — so most of it is unreachable by the gesture a
+ * phone user would naturally try. Phones get the single views instead.
+ */
+export const isViewAvailable = (view: View, isPhone: boolean): boolean =>
+  !(isPhone && view === 'quad');
+
+/** Where a phone lands when the view it would otherwise restore is unavailable. */
+export const FALLBACK_VIEW: View = 'outline';
+
 // Re-export 3D settings so existing importers from view-toolkit keep working
 export { faceSizeFor } from './view3d-settings';
 export type { MeshQuality, View3DSettings } from './view3d-settings';
 
-/** A stable header shared by every 2D and 3D editor pane. */
+/**
+ * A stable header shared by every 2D and 3D editor pane.
+ *
+ * `PanelHeader`'s `px-4` becomes `px-2` on a coarse pointer. 16px of gutter is
+ * cheap on a desktop and expensive on a phone: the cross-section cluster needs
+ * every pixel of a 360px row once its controls are at the touch floor, and the
+ * pane title beside it is already truncating to nothing at that width.
+ */
 export function ViewPaneHeader({ className, ...props }: React.ComponentProps<typeof PanelHeader>) {
-  return <PanelHeader className={cn('min-h-14', className)} {...props} />;
+  return <PanelHeader className={cn('min-h-14 pointer-coarse:px-2', className)} {...props} />;
 }
 
 // --- small atoms -----------------------------------------------------------
-
-// bg-card + text-foreground (not transparent) so both the closed control and the
-// native option popup are legible on the dark theme — the popup inherits these.
-const SELECT_CLASS =
-  'h-7 rounded border border-border bg-card px-1 text-xs text-foreground [&>option]:bg-card [&>option]:text-foreground';
 
 /** A label/value row used throughout the spec + weight panels. */
 export function SpecRow({ label, value }: { label: string; value: string }) {
@@ -60,6 +87,46 @@ export function SpecRow({ label, value }: { label: string; value: string }) {
       <span className="text-muted-foreground">{label}</span>
       <span className="tabular-nums">{value}</span>
     </div>
+  );
+}
+
+/**
+ * The display-unit picker.
+ *
+ * Lives in the toolbar on wide layouts and in the bottom sheet on the phone tier,
+ * where the toolbar row has no room for it — at 360px the four view tabs plus this
+ * plus the panels button come to ~411px, and because this is `shrink-0` the tab
+ * strip absorbed the overflow and pushed a whole view off-screen. One component
+ * either way, so a phone does not silently get a smaller control.
+ */
+export function UnitSelect({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (key: string) => void;
+  className?: string;
+}) {
+  return (
+    <Select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      title="Display units"
+      aria-label="Display units"
+      // The raised-panel palette rather than the primitive's `bg-background`: this
+      // one sits on the toolbar, where the page colour would make it disappear.
+      className={cn(
+        'shrink-0 bg-card text-card-foreground [&>option]:bg-card [&>option]:text-card-foreground',
+        className,
+      )}
+    >
+      {LENGTH_UNITS.map((u) => (
+        <option key={u.key} value={u.key}>
+          {u.label}
+        </option>
+      ))}
+    </Select>
   );
 }
 
@@ -76,18 +143,20 @@ export function Sel<T extends string>({
   title: string;
 }) {
   return (
-    <select
+    <Select
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
       title={title}
-      className={SELECT_CLASS}
+      // Denser than the default with a mouse; the coarse-pointer size survives the
+      // merge, so a fingertip still gets the full 44px.
+      className="h-7 px-1 text-xs"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 
@@ -101,9 +170,12 @@ export function OverlayToggle({
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
+  // The floor lives on the label, not the box: a native checkbox cannot be grown
+  // with padding, and a 44px one would look broken. The whole row is clickable, so
+  // that is the target worth measuring.
   return (
-    <label className="flex cursor-pointer items-center gap-2">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <label className="flex cursor-pointer items-center gap-2 pointer-coarse:min-h-11">
+      <Checkbox checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
     </label>
   );
@@ -323,15 +395,35 @@ export function EditorPane({
   // Stable across re-renders so the editor's target set (and the SplineEditor
   // re-fit/draw effects keyed on it) only changes when the pane actually changes.
   const p = useMemo(() => paneProps(kind, csIndex, settings), [kind, csIndex, settings]);
+  // Only the length-wise views have anything to gain from turning the board — a
+  // cross-section is already the shape of the pane it sits in. Gated on the pointer
+  // rather than on width so a narrow desktop window does not suddenly rotate under
+  // a mouse; whether the turn actually helps is then decided per pane inside
+  // `SplineEditor`, which is what keeps it from ever making a pane worse.
+  const allowTurn = useIsCoarsePointer() && kind !== 'crossSection';
   return (
-    <Panel className="flex min-h-0 flex-col">
-      <ViewPaneHeader className="flex-wrap gap-2">
-        <PanelTitle className="mr-auto">{title}</PanelTitle>
+    // `h-full` is load-bearing: in the quad layouts the pane is a grid item and
+    // stretches on its own, but a maximized pane's parent is a plain block, so
+    // without it the Panel shrinks to its content and leaves the rest of the
+    // screen empty — two thirds of it on a phone. The 3D pane has always passed
+    // its own `h-full` for the same reason.
+    <Panel className="flex h-full min-h-0 flex-col">
+      {/*
+        The header must keep a constant height. It used to wrap, and on a narrow
+        (phone) pane selecting a control point pushed the position editor onto a
+        second row — which shrank the canvas mid-drag and yanked the viewport out
+        from under the finger. One row always: the title truncates and the editor
+        scrolls sideways rather than either of them adding a row.
+      */}
+      <ViewPaneHeader className="gap-2">
+        <PanelTitle className="mr-auto min-w-0 truncate">{title}</PanelTitle>
         <SelectedPointEditor
           store={boardStore}
           units={units}
           targets={p.targets}
-          fallback={headerActions && <div className="flex items-center gap-1">{headerActions}</div>}
+          fallback={
+            headerActions && <div className="flex shrink-0 items-center gap-1">{headerActions}</div>
+          }
         />
       </ViewPaneHeader>
       <PanelBody className="min-h-0 flex-1 p-0">
@@ -351,6 +443,7 @@ export function EditorPane({
           formatSectionPosition={(cm) => fmtLen(cm, units)}
           onAddSectionAt={kind !== 'crossSection' ? onAddSectionAt : undefined}
           onScrub={kind !== 'crossSection' ? onScrub : undefined}
+          allowTurn={allowTurn}
           readout={makeReadout(kind, units)}
           measureCursor={kind === 'crossSection'}
           overlays={overlays}

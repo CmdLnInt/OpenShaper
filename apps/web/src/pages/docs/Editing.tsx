@@ -9,9 +9,9 @@ export default function DocsEditing() {
     <DocsPage
       route="/docs/editing"
       title="Editing a board"
-      lede="Control points, tangent handles, the four views, and how cross-sections interpolate."
+      lede="Control points, tangent handles, the views, and how cross-sections interpolate."
       toc={[
-        { id: 'views', label: 'The four views' },
+        { id: 'views', label: 'The views' },
         { id: 'guides', label: 'Guides in 3D' },
         { id: 'points', label: 'Control points & tangents' },
         { id: 'sections', label: 'Cross-sections' },
@@ -20,7 +20,7 @@ export default function DocsEditing() {
         { id: 'undo', label: 'Undo & history' },
       ]}
     >
-      <Section id="views" title="The four views">
+      <Section id="views" title="The views">
         <Terms>
           <Term name="Outline">
             The plan shape, seen from above. Mirrored about the stringer, so you edit one half and
@@ -41,7 +41,18 @@ export default function DocsEditing() {
         </Terms>
         <p>
           The quad view shows all four at once. Number keys switch views — see{' '}
-          <Link to="/docs/shortcuts">shortcuts</Link>.
+          <Link to="/docs/shortcuts">shortcuts</Link>. Phones do not get the quad view: four panes
+          in that width leaves none of them usable, so a phone opens on the outline and switches
+          between the single views instead.
+        </p>
+        <p>
+          On a touch screen, outline and rocker are drawn <strong>nose-up</strong> whenever the pane
+          is taller than it is wide — which on a phone held upright it is. A board is about four
+          times longer than it is wide, so lying it across a narrow pane wastes most of the height;
+          standing it up trades that for about half as much again in size. Turn the phone sideways
+          and the board lies down again, because a wide pane already fits it the better way round.
+          Nothing to set, and it never applies to the cross-section view, which is already the shape
+          of its pane.
         </p>
       </Section>
 
@@ -83,13 +94,18 @@ export default function DocsEditing() {
         </p>
         <p>
           Press <code>{shortcutKeys('cross-section-blur')}</code> to clear a selected point or
-          tangent handle.
+          tangent handle. On a touch screen, tapping empty canvas does the same — it also releases a
+          focused station.
         </p>
         <p>
           Right-click a control point to fair its local curve, switch between smooth and corner,
-          select either tangent, or delete it. Right-click a tangent to collapse it to zero length;
-          a selected collapsed tangent can be right-clicked again and extended so it is easy to
-          grab.
+          select either tangent, or delete it. On the outline and rocker the two tangents are named
+          for the end of the board they point at — tail and nose — so the labels still read true
+          when a phone draws the board nose-up. A cross-section has neither end nearer the nose, so
+          its handles stay left and right. Right-click a tangent to collapse it to zero length; a
+          selected collapsed tangent can be right-clicked again and extended so it is easy to grab.
+          On a touch screen, press and hold in place for the same menu — holding still is what
+          distinguishes it from a drag, so it will not interrupt one you have started.
         </p>
         <p>
           Press <code>{shortcutKeys('delete-point')}</code> to remove the selected point. The curve
@@ -185,7 +201,10 @@ export default function DocsEditing() {
         </p>
         <p>
           Your working board is saved to this device continuously, so closing the tab and coming
-          back restores it, along with the view you were in and the camera position.
+          back restores it, along with the view you were in and the camera position. The one
+          exception is the quad view on a phone, which is not offered there — a board last left in
+          it opens on the outline, and the stored preference is kept for the next time you open the
+          editor on a bigger screen.
         </p>
       </Section>
     </DocsPage>

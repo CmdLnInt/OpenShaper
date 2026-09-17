@@ -7,7 +7,16 @@
  */
 import type { InterpolationType } from '@openshaper/kernel';
 import type { BoardSpecs } from '@openshaper/store';
-import { Button, Input, Panel, PanelBody, PanelHeader, PanelTitle, Tooltip } from '@openshaper/ui';
+import {
+  Button,
+  Input,
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelTitle,
+  Textarea,
+  Tooltip,
+} from '@openshaper/ui';
 import { Check, Copy } from 'lucide-react';
 import {
   useEffect,
@@ -25,7 +34,7 @@ import { fmtDimsHeadline, fmtLen, fmtVol, parseLen, type LengthUnit } from './fo
 import type { TraceView, UseTrace } from './use-trace';
 import { FinPanel } from './FinPanel';
 import { boardStore } from './store';
-import { OverlayToggle, Sel, SpecRow } from './view-toolkit';
+import { OverlayToggle, Sel, SpecRow, UnitSelect } from './view-toolkit';
 import {
   fmtWeight,
   FOAM_TYPES,
@@ -70,7 +79,7 @@ function HistoryPanel() {
               key={index}
               type="button"
               title="Revert to before this step"
-              className="flex w-full items-center justify-between rounded px-2 py-1 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="flex min-h-8 w-full items-center justify-between rounded px-2 py-1 text-left transition-colors hover:bg-accent hover:text-accent-foreground pointer-coarse:min-h-11"
               onClick={() => boardStore.getState().jumpTo(index)}
             >
               <span>{e.label}</span>
@@ -133,6 +142,12 @@ export interface SidebarProps {
 
   ghost: boolean;
   ghostSpecs: BoardSpecs | null;
+
+  /**
+   * Change the display unit. Supplied only when the toolbar has no room for the
+   * picker (the phone tier), so exactly one of the two is ever mounted.
+   */
+  onUnitChange?: (key: string) => void;
 }
 
 export function Sidebar({
@@ -153,6 +168,7 @@ export function Sidebar({
   setOverlayToggles,
   ghost,
   ghostSpecs,
+  onUnitChange,
 }: SidebarProps) {
   // Brief confirmation after copying the dimensions headline; resets itself.
   const [copied, setCopied] = useState(false);
@@ -164,6 +180,17 @@ export function Sidebar({
 
   return (
     <div className="flex w-full min-h-0 shrink-0 flex-col gap-3 overflow-y-auto pr-0.5 lg:w-72">
+      {/* First, deliberately: the sheet opens at `half` and everything past Specs
+          is already below the fold there, so a control banished from the toolbar
+          must not land somewhere worse than where it came from. */}
+      {onUnitChange && (
+        <Panel>
+          <PanelBody className="flex items-center justify-between gap-3 py-2 text-sm">
+            <span className="text-muted-foreground">Display units</span>
+            <UnitSelect value={units.key} onChange={onUnitChange} />
+          </PanelBody>
+        </Panel>
+      )}
       <Panel>
         <PanelHeader>
           <PanelTitle>Specs</PanelTitle>
@@ -175,7 +202,7 @@ export function Sidebar({
                 <button
                   type="button"
                   aria-label="Copy dimensions"
-                  className="flex w-full items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-left hover:bg-muted"
+                  className="flex w-full items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-left hover:bg-muted pointer-coarse:min-h-11"
                   onClick={() => {
                     const text = fmtDimsHeadline(
                       specs.length,
@@ -309,12 +336,12 @@ export function Sidebar({
               />
             </label>
           ))}
-          <textarea
+          <Textarea
             value={meta.comments ?? ''}
             placeholder="Comments…"
             onChange={(e) => setMeta((m) => ({ ...m, comments: e.target.value }))}
             rows={2}
-            className="w-full resize-none rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+            className="resize-none"
           />
         </PanelBody>
       </Panel>
@@ -514,9 +541,24 @@ function TracePanel({
               </Button>
             </div>
             {trace.calibration && (
-              <p className="text-xs text-muted-foreground">
-                Follow the prompts on the {view} view. Press Esc to cancel.
-              </p>
+              // Escape was the ONLY way out of a calibration: `cancelCalibration` was
+              // exported from the hook and called by nothing, so a phone user who
+              // started one by mistake had to complete all four taps or reload the
+              // page. The button is the escape hatch; the key still works for anyone
+              // who has one.
+              <div className="flex items-center justify-between gap-2">
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  Follow the prompts on the {view} view.
+                </p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="shrink-0"
+                  onClick={trace.cancelCalibration}
+                >
+                  Cancel
+                </Button>
+              </div>
             )}
             {trace.lengthPending && (
               <label className="flex items-center gap-2">

@@ -7,6 +7,10 @@ export interface Hit {
   kind: HandleKind;
 }
 
+/** The world point a hit's handle actually sits at. */
+export const handlePoint = (knot: Spline['knots'][number], kind: HandleKind): Vec2 =>
+  kind === 'prev' ? knot.tangentToPrev : kind === 'next' ? knot.tangentToNext : knot.end;
+
 const distPx = (vp: Viewport, a: Vec2, screen: { x: number; y: number }): number => {
   const s = worldToScreen(vp, a);
   return Math.hypot(s.x - screen.x, s.y - screen.y);

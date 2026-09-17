@@ -27,6 +27,7 @@ import {
   drawMeasureCursor,
   drawSectionMarkers,
   drawSpline,
+  fillTextUpright,
   gridStep,
   hitFin,
   hitSectionMarker,
@@ -58,6 +59,9 @@ function makeCtx() {
     setLineDash: vi.fn(() => calls.push('setLineDash')),
     rect: vi.fn(() => calls.push('rect')),
     fillText: vi.fn((_t: string, _x: number, _y: number) => calls.push('fillText')),
+    // Only `fillTextUpright` uses these, and only on a turned pane.
+    translate: vi.fn((_x: number, _y: number) => calls.push('translate')),
+    rotate: vi.fn((_a: number) => calls.push('rotate')),
     measureText: vi.fn((t: string) => ({ width: t.length * 6 })),
     canvas: { width: 600, height: 300 },
     stroke: vi.fn(() => calls.push('stroke')),
@@ -556,5 +560,45 @@ describe('drawFinsPlan + hitFin', () => {
     const screen = worldToScreen(VP, center);
     expect(hitFin(fins, VP, screen, 8)).toBe(target);
     expect(hitFin(fins, VP, { x: screen.x + 9999, y: screen.y + 9999 }, 8)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// text on a turned pane
+// ---------------------------------------------------------------------------
+
+describe('fillTextUpright', () => {
+  /**
+   * The board turn rotates the canvas ELEMENT, which is what leaves every geometry
+   * routine in this file working in an ordinary unrotated space. Text is the one
+   * thing that does not survive it: a station label would read sideways. These two
+   * calls are the entire cost of that, which is the reason the element approach is
+   * cheap where rotating the transform would not have been.
+   */
+  it('draws text directly when the pane is upright', () => {
+    const { ctx, calls } = makeCtx();
+    fillTextUpright(ctx, '1173 mm', 10, 20, false);
+
+    expect(ctx.fillText).toHaveBeenCalledWith('1173 mm', 10, 20);
+    expect(calls).toEqual(['fillText']);
+  });
+
+  it('counter-rotates about the anchor when the pane is turned', () => {
+    const { ctx, calls } = makeCtx();
+    fillTextUpright(ctx, '1173 mm', 10, 20, true);
+
+    // Anchored by translate, so the +90° does not swing the label away from the
+    // thing it labels; save/restore so it cannot leak into the next draw.
+    expect(calls).toEqual(['save', 'translate', 'rotate', 'fillText', 'restore']);
+    expect(ctx.translate).toHaveBeenCalledWith(10, 20);
+    expect(ctx.fillText).toHaveBeenCalledWith('1173 mm', 0, 0);
+  });
+
+  it('turns by exactly the quarter the element turned, the other way', () => {
+    // The element is rotated -90°; `ctx.rotate` is clockwise-positive because canvas
+    // y grows downward, so +90° here is the inverse and the label ends up level.
+    const { ctx } = makeCtx();
+    fillTextUpright(ctx, 'x', 0, 0, true);
+    expect(ctx.rotate).toHaveBeenCalledWith(Math.PI / 2);
   });
 });

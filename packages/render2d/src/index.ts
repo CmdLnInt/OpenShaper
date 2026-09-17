@@ -9,16 +9,21 @@ export {
   lifeSizeViewport,
   viewportFromCenter,
   viewportCenter,
+  reframeForSize,
+  turnFitsLarger,
+  paneToTurnedCanvas,
+  turnedCanvasToPane,
   type ViewCenter,
   type Viewport,
   type Bounds,
   type ScreenPoint,
 } from './viewport';
 export { sampleSpline, boundsOf } from './sample';
-export { hitTest, type Hit, type HandleKind } from './hit';
+export { handlePoint, hitTest, type Hit, type HandleKind } from './hit';
 export {
   handleKindForVisualSide,
   visualSideForHandleKind,
+  handleSideName,
   type HandleSide,
   type TangentKind,
 } from './handle-side';
@@ -31,6 +36,7 @@ export {
   drawSectionMarkers,
   drawCurvatureComb,
   drawVerticalMarkers,
+  fillTextUpright,
   drawDistribution,
   drawFinsPlan,
   drawFinsProfile,

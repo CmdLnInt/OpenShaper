@@ -27,6 +27,7 @@ import {
 } from '@openshaper/ui';
 import { Menu as MenuIcon, SlidersHorizontal } from 'lucide-react';
 import {
+  Fragment,
   lazy,
   Suspense,
   useCallback,
@@ -84,6 +85,7 @@ import { ConstructionPanel } from './ConstructionPanel';
 import { SettingsDialog } from './SettingsDialog';
 import { loadSettings, saveSettings, type EditorSettings } from './settings';
 import { CrossSectionControls } from './CrossSectionControls';
+import { LandscapeHint } from './LandscapeHint';
 import { CoffeeIcon } from './components/Support';
 import { Sidebar, type OverlayToggles, type ResizeFields } from './Sidebar';
 import sampleBrd from './sample-board.brd?raw';
@@ -91,15 +93,19 @@ import { boardStore } from './store';
 import { SUPPORT_URL } from './support';
 import { BOARD_TEMPLATES } from './templates';
 import { clampSectionIndex } from './section-index';
+import { VIEW_KEYS } from './shortcuts';
 import { useKeyboardShortcuts } from './use-keyboard-shortcuts';
 import { useSettledBoard } from './use-settled-board';
-import { useIsDesktop } from './useMediaQuery';
+import { isShortViewport, useIsDesktop, useIsPhone, useIsShortViewport } from './useMediaQuery';
 import { useSpecsWorker } from './use-specs-worker';
 import { useTrace, type TraceView } from './use-trace';
 import {
   EditorPane,
   faceSizeFor,
+  FALLBACK_VIEW,
+  isViewAvailable,
   ThreeDControls,
+  UnitSelect,
   ViewPaneHeader,
   type EditorKind,
   type View,
@@ -234,16 +240,20 @@ function AppShell() {
   const bootViewState = useRef(loadViewState());
   const liveViewState = useRef(bootViewState.current);
   const pendingViews2d = useRef({ ...bootViewState.current.views2d });
-  const [view, setView] = useState<View>(bootViewState.current.view);
+  // `pickedView` is what the user chose (and what gets persisted); `view` is what
+  // this tier can actually show. Deriving rather than correcting the state means a
+  // phone renders Outline over a stored `quad` without destroying that preference —
+  // widen the window and quad comes straight back.
+  const [pickedView, setPickedView] = useState<View>(bootViewState.current.view);
   const viewSaveTimer = useRef<number>();
   const scheduleViewSave = useCallback(() => {
     window.clearTimeout(viewSaveTimer.current);
     viewSaveTimer.current = window.setTimeout(() => saveViewState(liveViewState.current), 500);
   }, []);
   useEffect(() => {
-    liveViewState.current = { ...liveViewState.current, view };
+    liveViewState.current = { ...liveViewState.current, view: pickedView };
     scheduleViewSave();
-  }, [view, scheduleViewSave]);
+  }, [pickedView, scheduleViewSave]);
   /** Per-pane framing report: consume the pending restore, persist the live value. */
   const reportPaneView = (kind: EditorKind) => (v: { cx: number; cy: number; scale: number }) => {
     delete pendingViews2d.current[kind];
@@ -259,8 +269,51 @@ function AppShell() {
   );
   // Editor layout tier: at `lg`+ the sidebar sits beside the viewport; below it the
   // sidebar moves into a draggable bottom sheet and the quad view stacks vertically.
+  // Narrower (or shorter) still is the phone tier, which drops quad entirely.
   const isDesktop = useIsDesktop();
-  const [sheetSnap, setSheetSnap] = useState<SheetSnap>('peek');
+  const isPhone = useIsPhone();
+  const isShort = useIsShortViewport();
+  const view = isViewAvailable(pickedView, isPhone) ? pickedView : FALLBACK_VIEW;
+  const views = VIEW_KEYS.filter((v) => isViewAvailable(v.view, isPhone));
+
+  // Which editors get used is invisible to autocapture — the panes are
+  // canvases. Recorded once per session per view (markView dedupes) so the
+  // question "is 3D a core tool or a curiosity" becomes answerable without a
+  // per-click stream.
+  // The one gate on changing view: the tab strip and the number keys both route
+  // through it, so a view this tier does not offer cannot be reached by either.
+  const selectView = useCallback(
+    (v: View) => {
+      if (!isViewAvailable(v, isPhone)) return;
+      setPickedView(v);
+      markView(v);
+    },
+    [isPhone],
+  );
+
+  // A short viewport (a phone held landscape) starts with the sheet out of the
+  // way: its 112px peek is more than a quarter of the screen there, and the
+  // point of turning the phone is to see the board.
+  const [sheetSnap, setSheetSnap] = useState<SheetSnap>(() =>
+    isShortViewport() ? 'closed' : 'peek',
+  );
+  // The sheet is fixed over the viewport bottom whenever it is mounted, so the
+  // view area must reserve its peek height — and reclaim it when it is closed.
+  const sheetOpen = !isDesktop && sheetSnap !== 'closed';
+  // "Showing panels" means more than the peek readout — at `peek` the button's
+  // job is still to reveal them, so it opens rather than closes.
+  const panelsShowing = sheetSnap === 'half' || sheetSnap === 'full';
+
+  // Publish the sheet's footprint so fixed elements outside this tree (the toast
+  // stack, the consent banner) can sit clear of it — and reclaim the space when
+  // it closes.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--os-sheet-inset', sheetOpen ? '7rem' : '0px');
+    return () => {
+      root.style.removeProperty('--os-sheet-inset');
+    };
+  }, [sheetOpen]);
   const [csIndex, setCsIndex] = useState(1);
   const [focusedSection, setFocusedSection] = useState<number | null>(null);
   // Transient cross-pane scrub: the board-length x being hovered in the rocker/outline,
@@ -384,7 +437,7 @@ function AppShell() {
   const [recentBoards, setRecentBoards] = useState(() => getRecentBoards());
 
   useKeyboardShortcuts({
-    setView,
+    setView: selectView,
     setCsIndex,
     metaRef,
     onCommandPalette: togglePalette,
@@ -712,15 +765,6 @@ function AppShell() {
     trace.loadImage(pendingTraceView.current, file, board ? getLength(board) : 0);
   };
 
-  // Which editors get used is invisible to autocapture — the panes are
-  // canvases. Recorded once per session per view (markView dedupes) so the
-  // question "is 3D a core tool or a curiosity" becomes answerable without a
-  // per-click stream.
-  const selectView = (v: View) => {
-    setView(v);
-    markView(v);
-  };
-
   const tab = (v: View, label: string) => (
     <Button size="sm" variant={view === v ? 'secondary' : 'ghost'} onClick={() => selectView(v)}>
       {label}
@@ -1017,91 +1061,96 @@ function AppShell() {
 
   // The four quad panes, built once and arranged either as a 2×2 grid (desktop) or a
   // vertical scrolling stack (compact) — the panes themselves are identical in both.
-  const quadPanes = [
-    <EditorPane
-      key="outline"
-      title="Outline"
-      kind="outline"
-      csIndex={clampedCs}
-      units={units}
-      sectionMarkers={sectionMarkers}
-      onPickSection={setCsIndex}
-      focusedSection={focusedSection}
-      onFocusSection={focusSection}
-      onMoveSection={moveSection}
-      onDeleteSection={deleteSectionAt}
-      onAddSectionAt={addSectionAt}
-      onScrub={scrubSection}
-      overlays={overlaysFor('outline')}
-      ghostSplines={ghostSplinesFor('outline')}
-      {...traceProps('outline')}
-      settings={settings}
-      viewCommand={viewCmd}
-      initialView={pendingViews2d.current.outline}
-      onViewChange={reportPaneView('outline')}
-    />,
-    <EditorPane
-      key="crossSection"
-      title={csTitle}
-      kind="crossSection"
-      csIndex={clampedCs}
-      units={units}
-      focusedSection={focusedSection}
-      onFocusSection={focusSection}
-      overlays={overlaysFor('crossSection')}
-      ghostSplines={ghostSplinesFor('crossSection')}
-      viewCommand={viewCmd}
-      headerActions={csControls}
-      settings={settings}
-      initialView={pendingViews2d.current.crossSection}
-      onViewChange={reportPaneView('crossSection')}
-    />,
-    <EditorPane
-      key="rocker"
-      title="Rocker (deck + bottom)"
-      kind="rocker"
-      csIndex={clampedCs}
-      units={units}
-      sectionMarkers={sectionMarkers}
-      onPickSection={setCsIndex}
-      focusedSection={focusedSection}
-      onFocusSection={focusSection}
-      onMoveSection={moveSection}
-      onDeleteSection={deleteSectionAt}
-      onAddSectionAt={addSectionAt}
-      onScrub={scrubSection}
-      overlays={overlaysFor('rocker')}
-      ghostSplines={ghostSplinesFor('rocker')}
-      {...traceProps('rocker')}
-      settings={settings}
-      viewCommand={viewCmd}
-      initialView={pendingViews2d.current.rocker}
-      onViewChange={reportPaneView('rocker')}
-    />,
-    <Panel key="3d" className="flex min-h-0 flex-col">
-      <ViewPaneHeader className="flex items-center justify-between gap-2">
-        <PanelTitle>3D</PanelTitle>
-        <ThreeDControls settings={view3d} onChange={patchView3d} compact />
-      </ViewPaneHeader>
-      <PanelBody className="min-h-0 flex-1 p-0">
-        <ThreeDPane
-          store={boardStore}
-          mode={view3d.mode}
-          lighting={view3d.lighting}
-          material={view3d.material}
-          color={view3d.color}
-          finColor={settings.finColor}
-          analysis={view3d.analysis}
-          targetFaceSize={faceSizeFor(view3d.meshQuality)}
-          showStringer={view3d.showStringer}
-          showSections={view3d.showSections}
-          activeSectionX={activeSectionX}
-          initialCamera={liveViewState.current.camera3d}
-          onCameraChange={onCameraChange}
-        />
-      </PanelBody>
-    </Panel>,
-  ];
+  // Only built for the view that uses them: the phone tier never offers quad, and
+  // this array carries the lazy 3D panel.
+  const quadPanes =
+    view !== 'quad'
+      ? []
+      : [
+          <EditorPane
+            key="outline"
+            title="Outline"
+            kind="outline"
+            csIndex={clampedCs}
+            units={units}
+            sectionMarkers={sectionMarkers}
+            onPickSection={setCsIndex}
+            focusedSection={focusedSection}
+            onFocusSection={focusSection}
+            onMoveSection={moveSection}
+            onDeleteSection={deleteSectionAt}
+            onAddSectionAt={addSectionAt}
+            onScrub={scrubSection}
+            overlays={overlaysFor('outline')}
+            ghostSplines={ghostSplinesFor('outline')}
+            {...traceProps('outline')}
+            settings={settings}
+            viewCommand={viewCmd}
+            initialView={pendingViews2d.current.outline}
+            onViewChange={reportPaneView('outline')}
+          />,
+          <EditorPane
+            key="crossSection"
+            title={csTitle}
+            kind="crossSection"
+            csIndex={clampedCs}
+            units={units}
+            focusedSection={focusedSection}
+            onFocusSection={focusSection}
+            overlays={overlaysFor('crossSection')}
+            ghostSplines={ghostSplinesFor('crossSection')}
+            viewCommand={viewCmd}
+            headerActions={csControls}
+            settings={settings}
+            initialView={pendingViews2d.current.crossSection}
+            onViewChange={reportPaneView('crossSection')}
+          />,
+          <EditorPane
+            key="rocker"
+            title="Rocker (deck + bottom)"
+            kind="rocker"
+            csIndex={clampedCs}
+            units={units}
+            sectionMarkers={sectionMarkers}
+            onPickSection={setCsIndex}
+            focusedSection={focusedSection}
+            onFocusSection={focusSection}
+            onMoveSection={moveSection}
+            onDeleteSection={deleteSectionAt}
+            onAddSectionAt={addSectionAt}
+            onScrub={scrubSection}
+            overlays={overlaysFor('rocker')}
+            ghostSplines={ghostSplinesFor('rocker')}
+            {...traceProps('rocker')}
+            settings={settings}
+            viewCommand={viewCmd}
+            initialView={pendingViews2d.current.rocker}
+            onViewChange={reportPaneView('rocker')}
+          />,
+          <Panel key="3d" className="flex min-h-0 flex-col">
+            <ViewPaneHeader className="flex items-center justify-between gap-2">
+              <PanelTitle>3D</PanelTitle>
+              <ThreeDControls settings={view3d} onChange={patchView3d} compact />
+            </ViewPaneHeader>
+            <PanelBody className="min-h-0 flex-1 p-0">
+              <ThreeDPane
+                store={boardStore}
+                mode={view3d.mode}
+                lighting={view3d.lighting}
+                material={view3d.material}
+                color={view3d.color}
+                finColor={settings.finColor}
+                analysis={view3d.analysis}
+                targetFaceSize={faceSizeFor(view3d.meshQuality)}
+                showStringer={view3d.showStringer}
+                showSections={view3d.showSections}
+                activeSectionX={activeSectionX}
+                initialCamera={liveViewState.current.camera3d}
+                onCameraChange={onCameraChange}
+              />
+            </PanelBody>
+          </Panel>,
+        ];
 
   const sidebarEl = (
     <Sidebar
@@ -1122,6 +1171,7 @@ function AppShell() {
       setOverlayToggles={setOverlayToggles}
       ghost={!!ghost}
       ghostSpecs={ghostSpecs}
+      onUnitChange={isPhone ? setUnitKey : undefined}
     />
   );
 
@@ -1141,18 +1191,31 @@ function AppShell() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-col border-b border-border bg-card text-card-foreground">
+      {/* Two 44px rows cost 88px, which is 23% of a landscape phone. Where height
+          is the scarce axis they sit side by side as one 44px row instead — the
+          wordmark and the Coffee link drop out to make the width work. */}
+      <div
+        className={cn(
+          'flex border-b border-border bg-card text-card-foreground',
+          isShort ? 'items-center' : 'flex-col',
+        )}
+      >
         {/* Row 1 — application menubar */}
-        <div className="flex h-11 items-center gap-1 px-1.5 sm:gap-2 sm:px-2">
+        <div className="flex h-11 shrink-0 items-center gap-1 px-1.5 sm:gap-2 sm:px-2">
           <a
             href="/"
-            className="group flex items-center gap-2 px-1.5 font-semibold transition-colors hover:text-primary"
+            className="group flex items-center gap-2 px-1.5 font-semibold transition-colors hover:text-primary pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
             title="OpenShaper home"
+            // The wordmark beside the brandmark is `hidden sm:inline`, so below 640px
+            // this link has no text content at all and `title` was its only name.
+            aria-label="OpenShaper home"
           >
             <Brandmark className="h-6 w-6 transition-transform duration-300 group-hover:rotate-3" />
-            <span className="hidden sm:inline">
-              Open<span className="text-primary">Shaper</span>
-            </span>
+            {!isShort && (
+              <span className="hidden sm:inline">
+                Open<span className="text-primary">Shaper</span>
+              </span>
+            )}
           </a>
           <ToolbarSeparator className="hidden sm:block" />
           {/* Phones: a single button opens the command palette, which lists every menu
@@ -1175,8 +1238,8 @@ function AppShell() {
             <Menu label="Export" items={exportMenu} />
             <Menu label="Help" items={helpMenu} />
           </MenuBar>
-          <div className="flex-1" />
-          {SUPPORT_URL && (
+          {!isShort && <div className="flex-1" />}
+          {SUPPORT_URL && !isShort && (
             <a
               href={SUPPORT_URL}
               target="_blank"
@@ -1195,38 +1258,39 @@ function AppShell() {
 
         {/* Row 2 — view tabs. The tabs scroll horizontally on narrow screens while the
             unit selector and (mobile) Panels toggle stay pinned to the right. */}
-        <div className="flex h-11 items-center gap-1 border-t border-border px-2">
-          <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-            {tab('quad', 'Quad')}
-            {tab('outline', 'Outline')}
-            {tab('rocker', 'Rocker')}
-            {tab('crossSection', 'Cross-section')}
-            {tab('3d', '3D')}
-          </div>
-          <select
-            value={unitKey}
-            onChange={(e) => setUnitKey(e.target.value)}
-            title="Display units"
-            className="h-8 shrink-0 rounded-md border border-border bg-card px-2 text-sm text-card-foreground [&>option]:bg-card [&>option]:text-card-foreground"
+        <div
+          className={cn(
+            'flex h-11 min-w-0 flex-1 items-center gap-1 px-2',
+            isShort ? 'border-l border-border' : 'border-t border-border',
+          )}
+        >
+          <div
+            role="group"
+            aria-label="Views"
+            className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
           >
-            {LENGTH_UNITS.map((u) => (
-              <option key={u.key} value={u.key}>
-                {u.label}
-              </option>
+            {views.map((v) => (
+              <Fragment key={v.view}>{tab(v.view, v.tabLabel)}</Fragment>
             ))}
-          </select>
+          </div>
+          {/* On a phone this row has no room for it — it moves into the sheet,
+              where the current unit stays visible next to the dimensions it
+              formats. See `UnitSelect`. */}
+          {!isPhone && <UnitSelect value={unitKey} onChange={setUnitKey} />}
           {/* Below lg the sidebar lives in a bottom sheet; this opens it. */}
           <Button
             size="sm"
             variant="ghost"
             className="shrink-0 lg:hidden"
-            title="Show board panels"
-            aria-label="Show board panels"
-            onClick={() => setSheetSnap('half')}
+            title={panelsShowing ? 'Hide board panels' : 'Show board panels'}
+            aria-label={panelsShowing ? 'Hide board panels' : 'Show board panels'}
+            onClick={() => setSheetSnap(panelsShowing ? 'closed' : 'half')}
           >
             <SlidersHorizontal className="size-4" />
           </Button>
         </div>
+
+        <LandscapeHint />
 
         {/* Hidden file inputs. The trace input is shared by the File menu + Sidebar,
             targeting whichever view `openTracePicker` last set on `pendingTraceView`. */}
@@ -1253,16 +1317,18 @@ function AppShell() {
         />
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-3 p-3">
+      {/* pb clears the bottom sheet, which is fixed over the viewport bottom on
+          compact layouts. It belongs here rather than on the quad column: every
+          view needs it, and a maximized pane was running 99px underneath. */}
+      <div className={cn('flex min-h-0 flex-1 gap-3 p-3', sheetOpen && 'pb-28')}>
         <div className="min-h-0 min-w-0 flex-1">
           {view === 'quad' ? (
             isDesktop ? (
               <div className="grid h-full grid-cols-2 grid-rows-2 gap-3">{quadPanes}</div>
             ) : (
-              // Compact: a single scrolling column, each pane a comfortable fixed height.
-              // pb clears the collapsed bottom sheet (PEEK_PX≈112px, fixed over the viewport
-              // bottom) so the last pane — the 3D view — can scroll fully into view above it.
-              <div className="flex h-full flex-col gap-3 overflow-y-auto pb-28">
+              // Compact: a single scrolling column, each pane a comfortable fixed
+              // height. Clearance for the sheet lives on the container above.
+              <div className="flex h-full flex-col gap-3 overflow-y-auto">
                 {quadPanes.map((pane, i) => (
                   <div
                     key={i}
@@ -1339,7 +1405,12 @@ function AppShell() {
       </div>
 
       {!isDesktop && (
-        <BottomSheet snap={sheetSnap} onSnapChange={setSheetSnap} peek={sheetPeek}>
+        <BottomSheet
+          snap={sheetSnap}
+          onSnapChange={setSheetSnap}
+          peek={sheetPeek}
+          canClose={isPhone}
+        >
           {sidebarEl}
         </BottomSheet>
       )}

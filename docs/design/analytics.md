@@ -510,6 +510,7 @@ Three rules govern every event:
 | `spec_sheet_opened`     | —                                                                                                                        | Cheapest thing in the Export menu; the floor the others are read against   |
 | `trace_image_loaded`    | `target`                                                                                                                 | Distinctive feature, zero prior visibility                                 |
 | `consent_banner`        | `action` (`shown` \| `accepted` \| `rejected`)                                                                           | Distinguishes bad copy from a banner nobody sees                           |
+| `landscape_hint`        | `action` (`shown` \| `dismissed`)                                                                                        | Whether the cheapest phone win is one anybody takes                        |
 | `pwa_installed`         | —                                                                                                                        | The install conversion; fires online, so unlike offline usage it sends     |
 | `session_summary`       | `edits`, `views_used`, `view_count`, `exported`, `saved`, `imported`, `template_used`, `duration_s`                      | Session depth without a per-action stream                                  |
 

@@ -347,6 +347,7 @@ export const drawSectionMarkers = (
   hoveredIndex: number | null = null,
   focusedIndex: number | null = null,
   label: SectionMarkerLabel | null = null,
+  turned = false,
 ): void => {
   ctx.save();
   for (const m of markers) {
@@ -374,7 +375,7 @@ export const drawSectionMarkers = (
     }
 
     if (label && label.index === m.index)
-      drawMarkerLabel(ctx, x, radius, height, label.handle, label.text);
+      drawMarkerLabel(ctx, x, radius, height, label.handle, label.text, turned);
   }
   ctx.restore();
 };
@@ -394,6 +395,7 @@ const drawMarkerLabel = (
   height: number,
   handle: SectionHandle,
   text: string,
+  turned: boolean,
 ): void => {
   const padX = 5;
   const boxH = 17;
@@ -416,7 +418,40 @@ const drawMarkerLabel = (
   ctx.stroke();
 
   ctx.fillStyle = '#F8FAFC';
-  ctx.fillText(text, boxX + padX, cy);
+  fillTextUpright(ctx, text, boxX + padX, cy, turned);
+};
+
+/**
+ * Draw text the right way up, even when the canvas ELEMENT has been turned.
+ *
+ * The board turn is a CSS rotation on the canvas, which is what leaves every
+ * geometry routine in this file working in an ordinary unrotated space. The one
+ * thing that does not survive a rotated element is text: a station label would
+ * come out reading sideways. Counter-rotating it here cancels the element's turn
+ * exactly, so the label stays horizontal while the board it annotates does not.
+ *
+ * `ctx.rotate` is clockwise-positive in canvas coordinates (y grows downward), and
+ * the element turns -90°, so +90° here is the inverse.
+ *
+ * There are exactly two text draws in this file, which is the main reason turning
+ * the element is so much cheaper than turning the transform.
+ */
+export const fillTextUpright = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  turned: boolean,
+): void => {
+  if (!turned) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.PI / 2);
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
 };
 
 /** Section marker whose top or bottom diamond contains `screen`, or null. */
@@ -545,6 +580,7 @@ export const drawVerticalMarkers = (
   markers: readonly { x: number; color: string; label?: string }[],
   vp: Viewport,
   height: number,
+  turned = false,
 ): void => {
   for (const m of markers) {
     const x = worldToScreen(vp, { x: m.x, y: 0 }).x;
@@ -559,7 +595,7 @@ export const drawVerticalMarkers = (
     if (m.label) {
       ctx.fillStyle = m.color;
       ctx.font = '10px ui-monospace, monospace';
-      ctx.fillText(m.label, x + 3, 12);
+      fillTextUpright(ctx, m.label, x + 3, 12, turned);
     }
   }
 };

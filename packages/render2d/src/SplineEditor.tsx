@@ -11,6 +11,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -40,13 +41,16 @@ import {
   type SectionHandle,
   type SectionMarker,
 } from './draw';
-import { hitTest, type Hit } from './hit';
+import { handlePoint, hitTest, type Hit } from './hit';
 import { boundsOf, sampleSpline } from './sample';
 import {
   fitToBounds,
   lifeSizeViewport,
   pan,
+  reframeForSize,
+  paneToTurnedCanvas,
   screenToWorld,
+  turnFitsLarger,
   viewportCenter,
   viewportFromCenter,
   worldToScreen,
@@ -179,14 +183,26 @@ export interface SplineEditorProps {
    * for persistence by the owner. Called with world center + zoom.
    */
   onViewChange?: (v: ViewCenter) => void;
+  /**
+   * Allow drawing the board turned nose-up when that fits it larger.
+   *
+   * Only the owner knows whether this view is length-wise (outline and rocker are;
+   * a cross-section is not) and whether the pointer is a fingertip. Whether the
+   * turn actually *helps* is decided here, per pane, by {@link turnFitsLarger} —
+   * so passing this can never shrink anything.
+   */
+  allowTurn?: boolean;
   className?: string;
 }
 
 type DragState =
-  | { mode: 'edit'; target: SplineTarget; hit: Hit }
-  | { mode: 'section'; index: number; started: boolean; handle: SectionHandle }
+  // `grab` is the vector from the pointer to the thing it grabbed, held for the
+  // life of the drag so the thing tracks the pointer's *movement* instead of
+  // teleporting to sit under it. See GRAB_OFFSET below.
+  | { mode: 'edit'; target: SplineTarget; hit: Hit; grab: Vec2 }
+  | { mode: 'section'; index: number; started: boolean; handle: SectionHandle; grab: number }
   // Dragging a fin to re-place it (plan pane).
-  | { mode: 'fin'; index: number }
+  | { mode: 'fin'; index: number; grab: Vec2 }
   // Middle-button / Space+left pan.
   | { mode: 'pan'; lastX: number; lastY: number }
   // Right button: a tap opens the context menu, a drag pans (tracked via `moved`).
@@ -227,7 +243,34 @@ const TRACE_HANDLE_OFFSET = 28;
 const TRACE_HANDLE_R = 9;
 
 /** Max pointer travel (px) for a right-button press+release to count as a tap, not a pan. */
+/**
+ * Hit radius for a control-point handle, in CSS px. A fingertip is both blunter
+ * and less precisely reported than a mouse cursor, so touch gets a target it can
+ * actually land on. This is safe to widen only because a drag preserves the grab
+ * offset (see GRAB_OFFSET): grabbing a handle from 14px away moves it by what the
+ * finger moves, it does not yank it 14px sideways first.
+ */
+const HIT_TOL_PX = 8;
+const TOUCH_HIT_TOL_PX = 14;
+
+/**
+ * Travel (px) past which a press is a drag rather than a tap.
+ *
+ * Two different questions share this number and they want different answers, so it
+ * is only the mouse one: did a right-button press become a pan?
+ */
 const TAP_SLOP = 4;
+
+/**
+ * Travel (px) past which a *finger* resting on empty canvas counts as having moved.
+ *
+ * Larger than {@link TAP_SLOP} because a fingertip's contact centroid wanders a few
+ * pixels while the hand believes it is holding still, so a mouse-sized budget makes a
+ * deliberate long-press on blank canvas fail at random. Generous is safe here —
+ * nothing is at stake on empty canvas, and the only cost of waiting is the menu
+ * opening a moment later.
+ */
+const TOUCH_STILL_SLOP = 10;
 
 /** Hold time (ms) for a single-finger touch to open the context menu (right-click stand-in). */
 const LONG_PRESS_MS = 500;
@@ -396,12 +439,13 @@ export function SplineEditor({
   viewCommand,
   initialView,
   onViewChange,
+  allowTurn = false,
   className,
 }: SplineEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const board = useBoard(store);
-  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [pane, setPane] = useState({ w: 0, h: 0 });
   const [vp, setVp] = useState<Viewport | null>(null);
   const [hover, setHover] = useState<Vec2 | null>(null);
   const [hoveredControl, setHoveredControl] = useState<{
@@ -463,31 +507,94 @@ export function SplineEditor({
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    const ro = new ResizeObserver(() => setPane({ w: el.clientWidth, h: el.clientHeight }));
     ro.observe(el);
-    setSize({ w: el.clientWidth, h: el.clientHeight });
+    setPane({ w: el.clientWidth, h: el.clientHeight });
     return () => ro.disconnect();
   }, []);
+
+  /**
+   * The world extent being drawn, mirrors included.
+   *
+   * Three things need it — the auto-fit, the "fit view" command, and the turn
+   * decision — and the first two used to sample and mirror the splines separately
+   * with identical code.
+   */
+  const bounds = useMemo(() => {
+    if (!board) return null;
+    const all = targets.flatMap((t) => sampleSpline(getTargetSpline(board, t)));
+    if (all.length === 0) return null;
+    let pts = all;
+    if (mirrorY) pts = pts.flatMap((p) => [p, { x: p.x, y: -p.y }]);
+    if (mirrorX) pts = pts.flatMap((p) => [p, { x: -p.x, y: p.y }]);
+    return boundsOf(pts);
+  }, [board, targets, mirrorX, mirrorY]);
+
+  /**
+   * TURNED: draw the board nose-up, by rotating the canvas ELEMENT rather than the
+   * transform inside it.
+   *
+   * The canvas keeps an ordinary, unrotated coordinate system — it simply believes
+   * it is a landscape canvas of the swapped size. So every screen-space consumer
+   * (`draw.ts`, `hit.ts`, `trace-transform.ts`, `pan`, `zoomAt`, `fitToBounds`) is
+   * untouched and keeps working in exactly the space it always did. Only two things
+   * know about the rotation: the CSS transform on the element, and `localPoint`,
+   * which maps a page coordinate back into that space.
+   *
+   * `size` is what the rest of the component sees, so swapping it here is what puts
+   * everything downstream into the turned space.
+   */
+  const turned = allowTurn && pane.w > 0 && !!bounds && turnFitsLarger(bounds, pane.w, pane.h);
+  const size = turned ? { w: pane.h, h: pane.w } : pane;
 
   // Re-fit when the target set changes, or we first get a board + a size.
   // A restored framing (initialView) replaces only the first fit of the mount;
   // every later refit trigger behaves as before.
+  //
+  // A *resize* is deliberately not a refit trigger. Re-fitting on resize threw
+  // away the user's pan/zoom, and worse, it moved the screen<->world mapping out
+  // from under a gesture already in flight: grabbing a control point selects it,
+  // which on a narrow pane wraps the pane header onto a second row, which shrinks
+  // the canvas, which re-fitted — so the held point teleported and every
+  // subsequent move wrote the wrong position. That made control points unusable
+  // on phones. A resize now carries the framing over instead, and while a gesture
+  // is in flight the viewport is left untouched entirely so the grabbed handle
+  // stays pinned under the pointer.
   const initialViewApplied = useRef(false);
+  // The canvas size and target set the current framing was computed for, so a
+  // resize can be told apart from a retarget. `framedSize` only advances when a
+  // new framing is actually applied — a resize frozen mid-gesture leaves it on the
+  // last applied one so a later carry-over still starts from the right centre.
+  const framedSize = useRef({ w: 0, h: 0 });
+  const framedKey = useRef<string | null>(null);
   useEffect(() => {
     if (!board || size.w === 0) return;
+    const prev = framedSize.current;
+    const resized = prev.w !== 0 && (prev.w !== size.w || prev.h !== size.h);
+    const retargeted = framedKey.current !== key;
+    framedKey.current = key;
+
     if (!initialViewApplied.current) {
       initialViewApplied.current = true;
       if (initialView) {
+        framedSize.current = { w: size.w, h: size.h };
         setVp(viewportFromCenter(initialView, size.w, size.h));
         return;
       }
     }
-    const all = targets.flatMap((t) => sampleSpline(getTargetSpline(board, t)));
-    if (all.length === 0) return;
-    let pts = all;
-    if (mirrorY) pts = pts.flatMap((p) => [p, { x: p.x, y: -p.y }]);
-    if (mirrorX) pts = pts.flatMap((p) => [p, { x: -p.x, y: p.y }]);
-    setVp(fitToBounds(boundsOf(pts), size.w, size.h));
+
+    if (resized && !retargeted) {
+      // A gesture in flight keeps the mapping frozen outright; carrying the centre
+      // over would still shift it by half the size delta.
+      if (drag.current || pinch.current) return;
+      framedSize.current = { w: size.w, h: size.h };
+      setVp((cur) => (cur ? reframeForSize(cur, prev.w, prev.h, size.w, size.h) : cur));
+      return;
+    }
+
+    if (!bounds) return;
+    framedSize.current = { w: size.w, h: size.h };
+    setVp(fitToBounds(bounds, size.w, size.h));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, board === null, size.w, size.h]);
 
@@ -544,10 +651,12 @@ export function SplineEditor({
               text: formatSectionPosition(dragged.pos),
             }
           : null,
+        turned,
       );
     }
     if (overlays?.distribution) drawDistribution(ctx, overlays.distribution, vp, size.h);
-    if (overlays?.verticalMarkers) drawVerticalMarkers(ctx, overlays.verticalMarkers, vp, size.h);
+    if (overlays?.verticalMarkers)
+      drawVerticalMarkers(ctx, overlays.verticalMarkers, vp, size.h, turned);
     if (overlays?.fins && overlays.fins.length > 0) {
       if (overlays.finView === 'profile') drawFinsProfile(ctx, overlays.fins, vp, selectedFin);
       else drawFinsPlan(ctx, overlays.fins, vp, selectedFin);
@@ -639,21 +748,34 @@ export function SplineEditor({
     curveThickness,
   ]);
 
+  // Canvas-local coordinates. While a gesture is in flight the canvas's page
+  // position is pinned to what it was when the gesture started: selecting a point
+  // can change the layout around the canvas (a pane header growing a row pushes it
+  // down without necessarily resizing it), and a rect that moved mid-drag would
+  // silently re-map the pointer and teleport whatever it was holding.
+  const gestureRect = useRef<{ left: number; top: number } | null>(null);
   const localPoint = (e: React.MouseEvent): { x: number; y: number } => {
-    const r = canvasRef.current!.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
+    const pinned = (drag.current || pinch.current) && gestureRect.current;
+    const r = pinned ?? canvasRef.current!.getBoundingClientRect();
+    const dx = e.clientX - r.left;
+    const dy = e.clientY - r.top;
+    // TURNED: the element is rotated -90° about its own top-left and slid down by
+    // its width, so canvas-local (lx, ly) sits at pane (ly, size.w - lx). This is
+    // that, inverted. `getBoundingClientRect` on a rotated element returns the
+    // axis-aligned box, which for an exact quarter turn is the pane box — so
+    // `dx`/`dy` are already pane-relative and only the axes have to be undone.
+    //
+    // The single place a mistake here shows up is "the point does not follow my
+    // finger", which is the bug this whole branch started with, so it is pinned by
+    // a round-trip test rather than trusted.
+    return turned ? paneToTurnedCanvas({ x: dx, y: dy }, size.w) : { x: dx, y: dy };
   };
 
   // Re-home the view to fit the curves (shared by double-click and the context menu).
   const fitView = useCallback(() => {
-    if (!board || size.w === 0) return;
-    const all = targets.flatMap((t) => sampleSpline(getTargetSpline(board, t)));
-    if (all.length === 0) return;
-    let pts = all;
-    if (mirrorY) pts = pts.flatMap((p) => [p, { x: p.x, y: -p.y }]);
-    if (mirrorX) pts = pts.flatMap((p) => [p, { x: -p.x, y: p.y }]);
-    setVp(fitToBounds(boundsOf(pts), size.w, size.h));
-  }, [board, targets, mirrorX, mirrorY, size.w, size.h]);
+    if (!bounds || size.w === 0) return;
+    setVp(fitToBounds(bounds, size.w, size.h));
+  }, [bounds, size.w, size.h]);
 
   // Respond to imperative view commands (fit / lifeSize) driven by the seq counter.
   // The effect only fires when seq changes — the same kind can be issued multiple
@@ -674,14 +796,17 @@ export function SplineEditor({
 
   // Nearest control-point handle under a screen point, across all target splines.
   const hitAny = useCallback(
-    (p: { x: number; y: number }): { target: SplineTarget; hit: Hit } | null => {
+    (
+      p: { x: number; y: number },
+      tolPx = HIT_TOL_PX,
+    ): { target: SplineTarget; hit: Hit } | null => {
       if (!vp || !board) return null;
       for (const t of targets) {
         const preferred =
           selection && sameTarget(selection.target, t)
             ? { index: selection.index, kind: selection.kind ?? ('end' as const) }
             : undefined;
-        const hit = hitTest(getTargetSpline(board, t), vp, p, 8, preferred);
+        const hit = hitTest(getTargetSpline(board, t), vp, p, tolPx, preferred);
         if (hit) return { target: t, hit };
       }
       return null;
@@ -708,6 +833,9 @@ export function SplineEditor({
       if (!vp || !board) return;
       setMenu(null);
       const p = localPoint(e);
+      const touch = e.pointerType === 'touch';
+      // Pin the mapping for whatever gesture this press starts.
+      gestureRect.current = canvasRef.current!.getBoundingClientRect();
 
       // Trace calibration takes precedence over all editing: a click captures a point.
       // Steps that pick points ON THE IMAGE report image-pixel coords; steps that pick
@@ -726,7 +854,7 @@ export function SplineEditor({
 
       // Touch: track the pointer and route multi-touch / long-press gestures. A single
       // finger then falls through to the normal left-button select/edit path below.
-      if (e.pointerType === 'touch') {
+      if (touch) {
         pointers.current.set(e.pointerId, p);
         if (pointers.current.size === 2) {
           // Second finger: abandon any in-progress one-finger edit and start a pinch.
@@ -771,7 +899,10 @@ export function SplineEditor({
           drag.current = null;
           const marker = sectionMarkerAt(p);
           if (marker) onPickSection?.(marker.index);
-          const picked = marker ? null : hitAny(p);
+          // The touch radius, not the mouse one: this path is only ever reached by a
+          // finger, and picking a point up to drag it used to have a target nearly
+          // twice the size of long-pressing the same point for its menu.
+          const picked = marker ? null : hitAny(p, TOUCH_HIT_TOL_PX);
           if (picked)
             store
               .getState()
@@ -781,6 +912,7 @@ export function SplineEditor({
             targets,
             vp,
             screen: p,
+            tolPx: TOUCH_HIT_TOL_PX,
             mirrorX,
             mirrorY,
             store,
@@ -826,6 +958,7 @@ export function SplineEditor({
             index: marker.index,
             started: false,
             handle: p.y < size.h / 2 ? 'top' : 'bottom',
+            grab: marker.pos - screenToWorld(vp, p).x,
           };
           setCursor('ew-resize');
           return;
@@ -835,13 +968,28 @@ export function SplineEditor({
         return;
       }
       onFocusSection?.(null);
-      const picked = hitAny(p);
+      const picked = hitAny(p, touch ? TOUCH_HIT_TOL_PX : HIT_TOL_PX);
       if (picked) {
         store
           .getState()
           .select({ target: picked.target, index: picked.hit.index, kind: picked.hit.kind });
         store.getState().beginEdit();
-        drag.current = { mode: 'edit', target: picked.target, hit: picked.hit };
+        // GRAB_OFFSET: remember where the handle sits relative to the pointer, and
+        // move it by the pointer's delta for the rest of the drag. Assigning the
+        // pointer's own position instead snapped the handle under the cursor on the
+        // first move — up to the hit radius in one frame, which is most of a phone's
+        // board width. That snap is what made mobile edits jump.
+        const handle = handlePoint(
+          getTargetSpline(board, picked.target).knots[picked.hit.index]!,
+          picked.hit.kind,
+        );
+        const at = screenToWorld(vp, p);
+        drag.current = {
+          mode: 'edit',
+          target: picked.target,
+          hit: picked.hit,
+          grab: { x: handle.x - at.x, y: handle.y - at.y },
+        };
         return;
       }
       // Interactive trace image (after control points so curve edits still win): grab the
@@ -870,11 +1018,19 @@ export function SplineEditor({
       }
       // A fin (plan pane) takes the click after control points: select + start dragging.
       if (overlays?.fins && overlays.finView !== 'profile') {
-        const finIndex = hitFin(overlays.fins, vp, p);
+        const finIndex = hitFin(overlays.fins, vp, p, touch ? TOUCH_HIT_TOL_PX : HIT_TOL_PX);
         if (finIndex !== null) {
           store.getState().selectFin(finIndex);
           store.getState().beginEdit('Move fin');
-          drag.current = { mode: 'fin', index: finIndex };
+          // `moveFin` reads the point as the fin's base centre, so that midpoint is
+          // what the grab offset is measured from (see GRAB_OFFSET).
+          const { fore, aft } = overlays.fins[finIndex]!.baseLine;
+          const at = screenToWorld(vp, p);
+          drag.current = {
+            mode: 'fin',
+            index: finIndex,
+            grab: { x: (fore.x + aft.x) / 2 - at.x, y: (fore.y + aft.y) / 2 - at.y },
+          };
           return;
         }
       }
@@ -930,10 +1086,27 @@ export function SplineEditor({
           pinch.current = { dist: nd, cx: ncx, cy: ncy };
           return;
         }
-        // One finger that travels past the tap slop is a drag, not a long-press.
+        // One finger that has moved is a drag, not a long-press — but how far it has
+        // to move depends entirely on what it is holding.
+        //
+        // With a live edit underway the answer is "at all". This is the gesture that
+        // made fine adjustment impossible on a phone: press a control point, nudge it
+        // a couple of pixels, hold for half a second to check the line, and the timer
+        // fired — `endEdit()` cut the drag dead and dropped a menu over the board
+        // while the finger was still on the point. A mouse-sized 4px budget could not
+        // catch it, because at a phone's ~1.5px/cm a deliberate 1cm nudge is under two
+        // pixels. Anything the user can see is a drag.
+        //
+        // With nothing under the finger there is no drag to protect, so the finger's
+        // own noise floor is the right threshold instead.
+        const dragging =
+          drag.current?.mode === 'edit' ||
+          drag.current?.mode === 'fin' ||
+          drag.current?.mode === 'section';
         if (
           longPress.current &&
-          Math.hypot(p.x - longPress.current.x, p.y - longPress.current.y) > TAP_SLOP
+          Math.hypot(p.x - longPress.current.x, p.y - longPress.current.y) >
+            (dragging ? 0 : TOUCH_STILL_SLOP)
         ) {
           cancelLongPress();
         }
@@ -996,7 +1169,7 @@ export function SplineEditor({
           // there showing a stale position next to a live one. Drop it for the drag.
           setHover(null);
         }
-        onMoveSection?.(d.index, world.x);
+        onMoveSection?.(d.index, world.x + d.grab);
         return;
       }
       if (d.mode === 'traceMove') {
@@ -1014,12 +1187,15 @@ export function SplineEditor({
         );
         return;
       }
+      // GRAB_OFFSET: what the pointer moves, the handle moves — it is never assigned
+      // the pointer's own position, which would snap it under the cursor.
+      const held = { x: world.x + d.grab.x, y: world.y + d.grab.y };
       if (d.mode === 'fin') {
-        store.getState().moveFin(d.index, world);
+        store.getState().moveFin(d.index, held);
         return;
       }
-      if (d.hit.kind === 'end') store.getState().moveControlPoint(d.target, d.hit.index, world);
-      else store.getState().moveTangent(d.target, d.hit.index, d.hit.kind, world);
+      if (d.hit.kind === 'end') store.getState().moveControlPoint(d.target, d.hit.index, held);
+      else store.getState().moveTangent(d.target, d.hit.index, d.hit.kind, held);
     },
     [
       vp,
@@ -1194,8 +1370,21 @@ export function SplineEditor({
       <canvas
         ref={canvasRef}
         style={{
-          width: '100%',
-          height: '100%',
+          // Turned, the element is laid out at its own (landscape) size and rotated
+          // into the pane; upright, it just fills it. Rotating the ELEMENT rather
+          // than the drawing keeps the canvas's coordinate system ordinary, which
+          // is what leaves every hit test and draw routine untouched.
+          ...(turned
+            ? {
+                position: 'absolute' as const,
+                top: 0,
+                left: 0,
+                width: `${size.w}px`,
+                height: `${size.h}px`,
+                transformOrigin: '0 0',
+                transform: `translate(0px, ${size.w}px) rotate(-90deg)`,
+              }
+            : { width: '100%', height: '100%' }),
           display: 'block',
           touchAction: 'none',
           cursor,

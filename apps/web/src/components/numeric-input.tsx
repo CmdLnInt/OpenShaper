@@ -12,6 +12,7 @@ export function NumericInput({
   placeholder,
   autoFocus,
   disabled,
+  signed,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -24,13 +25,23 @@ export function NumericInput({
   placeholder?: string;
   autoFocus?: boolean;
   disabled?: boolean;
+  /**
+   * The value can legitimately be negative, so do not ask for a decimal keypad.
+   *
+   * `inputMode="decimal"` requests digits and a separator — and nothing else, which
+   * on a phone means no minus key at all. Fin toe, cant and sweep commit whatever
+   * float is typed (`FinPanel` patches them with no clamp), so a keypad that cannot
+   * express the value is worse than a full keyboard that can.
+   */
+  signed?: boolean;
 }) {
   return (
     <Input
       aria-label={ariaLabel}
       value={value}
       type={type}
-      inputMode="decimal"
+      inputMode={signed ? 'text' : 'decimal'}
+      enterKeyHint="done"
       step={step}
       placeholder={placeholder}
       autoFocus={autoFocus}
