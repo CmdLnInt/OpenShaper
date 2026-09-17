@@ -254,6 +254,47 @@ describe('<SelectedPointEditor />', () => {
     expect(screen.getByLabelText('Y position').getAttribute('step')).toBe(expectedStep);
   });
 
+  it('labels cross-section coordinates as transverse Y and vertical Z', () => {
+    const store = createBoardStore();
+    act(() => {
+      store.getState().load(makeBoard());
+      store
+        .getState()
+        .select({ target: { kind: 'crossSection', index: 1 }, index: 1, kind: 'end' });
+    });
+
+    render(
+      <SelectedPointEditor
+        store={store}
+        units={DEFAULT_LENGTH_UNIT}
+        targets={[{ kind: 'crossSection', index: 1 }]}
+      />,
+    );
+
+    expect(screen.getByLabelText('Y position')).toBeTruthy();
+    expect(screen.getByLabelText('Z position')).toBeTruthy();
+    expect(screen.queryByLabelText('X position')).toBeNull();
+  });
+
+  it.each(['deck', 'bottom'] as const)(
+    'labels %s coordinates as longitudinal X and vertical Z',
+    (kind) => {
+      const store = createBoardStore();
+      act(() => {
+        store.getState().load(makeBoard());
+        store.getState().select({ target: { kind }, index: 1, kind: 'end' });
+      });
+
+      render(
+        <SelectedPointEditor store={store} units={DEFAULT_LENGTH_UNIT} targets={[{ kind }]} />,
+      );
+
+      expect(screen.getByLabelText('X position')).toBeTruthy();
+      expect(screen.getByLabelText('Z position')).toBeTruthy();
+      expect(screen.queryByLabelText('Y position')).toBeNull();
+    },
+  );
+
   it.each([
     ['end', 'control point'],
     ['next', 'handle point'],
