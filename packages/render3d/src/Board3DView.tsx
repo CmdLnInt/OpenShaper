@@ -1,6 +1,6 @@
 import type { BezierBoard } from '@openshaper/kernel';
 import type { BoardState } from '@openshaper/store';
-import { GizmoHelper, GizmoViewport, TrackballControls } from '@react-three/drei';
+import { GizmoHelper, TrackballControls } from '@react-three/drei';
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
 import {
   useEffect,
@@ -19,6 +19,7 @@ import {
 } from 'three';
 import type { StoreApi } from 'zustand/vanilla';
 import { boardSpan, meshToGeometry, tessellateAsync } from './geometry';
+import { BoardViewcube } from './BoardViewcube';
 import { Fins3D } from './Fins3D';
 import { Guides3D } from './Guides3D';
 
@@ -136,7 +137,7 @@ function TrackballNavigation({
       ref={controlsRef}
       makeDefault
       rotateSpeed={4}
-      dynamicDampingFactor={0.1}
+      staticMoving
       target={initialCamera?.target}
       onChange={reportPose}
     />
@@ -147,41 +148,42 @@ function BoardGizmo() {
   const { camera, controls } = useThree();
   const fallbackTarget = useMemo(() => new Vector3(), []);
 
-  const snapToAxis = (event: ThreeEvent<PointerEvent>) => {
+  const snapToView = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
     const trackball = controls as ComponentRef<typeof TrackballControls> | null;
     const target = trackball?.target ?? fallbackTarget;
     const radius = camera.position.distanceTo(target);
-    if (radius <= 0) return;
-    const axis = event.object.position;
-    const ax = Math.abs(axis.x);
-    const ay = Math.abs(axis.y);
-    const az = Math.abs(axis.z);
+    if (radius <= 0) return null;
 
-    if (az >= ax && az >= ay) {
-      const sign = Math.sign(axis.z) || 1;
-      camera.position.set(target.x, target.y, target.z + sign * radius);
-      camera.up.set(0, sign, 0);
-    } else if (ay >= ax) {
-      // Canonical profile: nose (+X) right, deck (+Z) up.
-      camera.position.set(target.x, target.y - radius, target.z);
-      camera.up.set(0, 0, 1);
+    // Faces expose their direction through the hit normal. Edge and corner hit
+    // meshes are positioned in the direction they represent.
+    const direction = event.object.position.lengthSq()
+      ? event.object.position.clone()
+      : event.face?.normal.clone();
+    if (!direction?.lengthSq()) return null;
+    direction.normalize();
+
+    camera.position.copy(target).addScaledVector(direction, radius);
+    if (Math.abs(direction.z) > 0.999) {
+      // Looking down Z: +X (the nose) stays on the right of the screen.
+      camera.up.set(0, Math.sign(direction.z), 0);
     } else {
-      const sign = Math.sign(axis.x) || 1;
-      camera.position.set(target.x + sign * radius, target.y, target.z);
+      // Profiles and isometric views keep the deck generally upright.
       camera.up.set(0, 0, 1);
     }
     camera.lookAt(target);
     trackball?.update();
+    return null;
   };
 
   return (
     <GizmoHelper alignment="bottom-right" margin={[56, 56]}>
-      <GizmoViewport
-        disabled
-        onPointerDown={snapToAxis}
-        axisColors={['#22D3EE', '#2DD4BF', '#A78BFA']}
-        labelColor="#E6EDF5"
+      <BoardViewcube
+        onClick={snapToView}
+        color="#E8EEF5"
+        hoverColor="#22D3EE"
+        textColor="#0A1424"
+        strokeColor="#51647D"
       />
     </GizmoHelper>
   );
