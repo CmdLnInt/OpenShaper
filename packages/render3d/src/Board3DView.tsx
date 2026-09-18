@@ -138,6 +138,11 @@ function TrackballNavigation({
       makeDefault
       rotateSpeed={4}
       staticMoving
+      cursorZoom
+      // three-stdlib's orthographic zoom-out guard compares zoom against
+      // maxDistance squared. Its Infinity default therefore blocks all zoom-out.
+      // Orthographic controls do not otherwise use camera distance limits.
+      maxDistance={0}
       target={initialCamera?.target}
       onChange={reportPose}
     />
