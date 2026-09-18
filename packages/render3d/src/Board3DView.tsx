@@ -50,6 +50,8 @@ export interface Board3DViewProps {
   color?: string;
   /** Fin blade color (defaults to the brand cyan). */
   finColor?: string;
+  /** View-cube labels and borders (defaults to the primary 2D curve color). */
+  viewCubeLineColor?: string;
   /** Surface-analysis overlay (defaults to 'none'). */
   analysis?: AnalysisMode;
   /** Target tessellation face size in cm (smaller = finer mesh). Defaults to ~0.9 cm. */
@@ -149,7 +151,7 @@ function TrackballNavigation({
   );
 }
 
-function BoardGizmo() {
+function BoardGizmo({ lineColor }: { lineColor: string }) {
   const { camera, controls } = useThree();
   const fallbackTarget = useMemo(() => new Vector3(), []);
 
@@ -185,10 +187,10 @@ function BoardGizmo() {
     <GizmoHelper alignment="bottom-right" margin={[56, 56]}>
       <BoardViewcube
         onClick={snapToView}
-        color="#E8EEF5"
-        hoverColor="#22D3EE"
-        textColor="#0A1424"
-        strokeColor="#51647D"
+        color="#0F1C30"
+        hoverColor="#1E3149"
+        textColor={lineColor}
+        strokeColor={lineColor}
       />
     </GizmoHelper>
   );
@@ -427,6 +429,7 @@ export function Board3DView({
   material = 'gloss',
   color = BOARD_COLOR,
   finColor,
+  viewCubeLineColor = '#22D3EE',
   analysis = 'none',
   targetFaceSize = DEFAULT_FACE_SIZE,
   showStringer = false,
@@ -491,7 +494,7 @@ export function Board3DView({
           resetViewSequence={resetViewSequence}
           span={span}
         />
-        <BoardGizmo />
+        <BoardGizmo lineColor={viewCubeLineColor} />
       </Canvas>
     </div>
   );

@@ -97,44 +97,54 @@ function ViewcubeHitArea({
 
 export function BoardViewcube({
   onClick,
-  color = '#E8EEF5',
-  hoverColor = '#22D3EE',
-  textColor = '#0A1424',
-  strokeColor = '#51647D',
+  color = '#0F1C30',
+  hoverColor = '#1E3149',
+  textColor = '#22D3EE',
+  strokeColor = '#22D3EE',
   font = '40px Inter, Arial, sans-serif',
 }: BoardViewcubeProps) {
   const { gl } = useThree();
   const [hoveredFace, setHoveredFace] = useState<number | null>(null);
-  const textures = useMemo(
+  const textureSets = useMemo(
     () =>
       FACE_DEFINITIONS.map(({ text, rotation }) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 256;
-        const context = canvas.getContext('2d');
-        if (context) {
-          context.fillStyle = color;
-          context.fillRect(0, 0, canvas.width, canvas.height);
-          context.strokeStyle = strokeColor;
-          context.lineWidth = 2;
-          context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
-          context.translate(canvas.width / 2, canvas.height / 2);
-          context.rotate(rotation);
-          context.fillStyle = textColor;
-          context.font = font;
-          context.textAlign = 'center';
-          context.textBaseline = 'middle';
-          context.fillText(text, 0, 0);
-        }
-        const texture = new CanvasTexture(canvas);
-        texture.colorSpace = SRGBColorSpace;
-        texture.anisotropy = gl.capabilities.getMaxAnisotropy() || 1;
-        return texture;
+        const makeTexture = (background: string) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 256;
+          canvas.height = 256;
+          const context = canvas.getContext('2d');
+          if (context) {
+            context.fillStyle = background;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.strokeStyle = strokeColor;
+            context.lineWidth = 2;
+            context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+            context.translate(canvas.width / 2, canvas.height / 2);
+            context.rotate(rotation);
+            context.fillStyle = textColor;
+            context.font = font;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(text, 0, 0);
+          }
+          const texture = new CanvasTexture(canvas);
+          texture.colorSpace = SRGBColorSpace;
+          texture.anisotropy = gl.capabilities.getMaxAnisotropy() || 1;
+          return texture;
+        };
+        return { normal: makeTexture(color), highlighted: makeTexture(hoverColor) };
       }),
-    [color, font, gl, strokeColor, textColor],
+    [color, font, gl, hoverColor, strokeColor, textColor],
   );
 
-  useEffect(() => () => textures.forEach((texture) => texture.dispose()), [textures]);
+  useEffect(
+    () => () =>
+      textureSets.forEach(({ normal, highlighted }) => {
+        normal.dispose();
+        highlighted.dispose();
+      }),
+    [textureSets],
+  );
 
   return (
     <group scale={[60, 60, 60]}>
@@ -150,12 +160,11 @@ export function BoardViewcube({
         onClick={onClick}
       >
         <boxGeometry />
-        {textures.map((texture, index) => (
+        {textureSets.map(({ normal, highlighted }, index) => (
           <meshBasicMaterial
             key={FACE_DEFINITIONS[index]!.text}
             attach={`material-${index}`}
-            map={texture}
-            color={hoveredFace === index ? hoverColor : 'white'}
+            map={hoveredFace === index ? highlighted : normal}
             toneMapped={false}
           />
         ))}
