@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useState } from 'react';
 import { CanvasTexture, SRGBColorSpace, Vector3 } from 'three';
 
-type ViewcubeClick = (event: ThreeEvent<MouseEvent>) => null;
+type ViewcubeClick = (event: ThreeEvent<PointerEvent>) => null;
 
 interface BoardViewcubeProps {
   onClick: ViewcubeClick;
@@ -81,7 +81,7 @@ function ViewcubeHitArea({
         event.stopPropagation();
         setHovered(false);
       }}
-      onClick={onClick}
+      onPointerDown={onClick}
     >
       <boxGeometry args={dimensions} />
       <meshBasicMaterial
@@ -157,7 +157,7 @@ export function BoardViewcube({
           event.stopPropagation();
           setHoveredFace(Math.floor((event.faceIndex ?? 0) / 2));
         }}
-        onClick={onClick}
+        onPointerDown={onClick}
       >
         <boxGeometry />
         {textureSets.map(({ normal, highlighted }, index) => (

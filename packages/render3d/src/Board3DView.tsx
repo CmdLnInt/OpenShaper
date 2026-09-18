@@ -97,16 +97,14 @@ function OrthographicFit({ span }: { span: number }) {
 function TrackballNavigation({
   initialCamera,
   onCameraChange,
-  resetViewSequence,
-  span,
+  flipViewSequence,
 }: {
   initialCamera?: CameraPose;
   onCameraChange?: (pose: CameraPose) => void;
-  resetViewSequence: number;
-  span: number;
+  flipViewSequence: number;
 }) {
   const controlsRef = useRef<ComponentRef<typeof TrackballControls>>(null);
-  const { camera, size } = useThree();
+  const { camera } = useThree();
 
   const reportPose = () => {
     const controls = controlsRef.current;
@@ -118,21 +116,19 @@ function TrackballNavigation({
   };
 
   useEffect(() => {
-    if (resetViewSequence === 0) return;
+    if (flipViewSequence === 0) return;
     const controls = controlsRef.current;
     if (!controls) return;
-    const distance = span * 1.1;
-    controls.target.set(0, 0, 0);
-    camera.position.set(0, -distance, distance * 0.45);
-    camera.up.set(0, 0, 1);
-    if (camera instanceof OrthographicCamera) {
-      camera.zoom = orthographicZoomFor(size.width, span);
-      camera.updateProjectionMatrix();
-    }
+    const offset = camera.position.sub(controls.target);
+    offset.y *= -1;
+    offset.z *= -1;
+    camera.position.add(controls.target);
+    camera.up.y *= -1;
+    camera.up.z *= -1;
     camera.lookAt(controls.target);
     controls.update();
     reportPose();
-  }, [camera, resetViewSequence, size.width, span]);
+  }, [camera, flipViewSequence]);
 
   return (
     <TrackballControls
@@ -155,7 +151,7 @@ function BoardGizmo({ lineColor }: { lineColor: string }) {
   const { camera, controls } = useThree();
   const fallbackTarget = useMemo(() => new Vector3(), []);
 
-  const snapToView = (event: ThreeEvent<MouseEvent>) => {
+  const snapToView = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
     const trackball = controls as ComponentRef<typeof TrackballControls> | null;
     const target = trackball?.target ?? fallbackTarget;
@@ -444,15 +440,11 @@ export function Board3DView({
   const span = board ? boardSpan(board) : 200;
   const d = span * 1.1;
   const resolved: Board3DMode = mode ?? (wireframe ? 'wireframe' : 'shaded');
-  const [resetViewSequence, setResetViewSequence] = useState(0);
+  const [flipViewSequence, setFlipViewSequence] = useState(0);
+  const [flipHovered, setFlipHovered] = useState(false);
 
   return (
-    <div
-      className={className}
-      style={{ width: '100%', height: '100%' }}
-      onDoubleClick={() => setResetViewSequence((sequence) => sequence + 1)}
-      title="Double-click to reset the 3D view"
-    >
+    <div className={className} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <Canvas
         dpr={[1, 2]}
         orthographic
@@ -491,11 +483,40 @@ export function Board3DView({
         <TrackballNavigation
           initialCamera={initialCamera}
           onCameraChange={onCameraChange}
-          resetViewSequence={resetViewSequence}
-          span={span}
+          flipViewSequence={flipViewSequence}
         />
         <BoardGizmo lineColor={viewCubeLineColor} />
       </Canvas>
+      <button
+        type="button"
+        onClick={() => setFlipViewSequence((sequence) => sequence + 1)}
+        onMouseEnter={() => setFlipHovered(true)}
+        onMouseLeave={() => setFlipHovered(false)}
+        style={{
+          position: 'absolute',
+          right: 26,
+          bottom: 116,
+          zIndex: 1,
+          border: 0,
+          padding: 0,
+          background: 'transparent',
+          color: flipHovered ? '#1E3149' : '#0F1C30',
+          cursor: 'default',
+        }}
+        aria-label="Flip view"
+        title="Flip the view 180° around the board length axis"
+      >
+        <svg width="60" height="60" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path
+            fill="currentColor"
+            d="M2.6 5.6c.9-2.1 3-3.6 5.4-3.6 3 0 5.4 2.2 5.9 5h2C15.4 3.1 12.1 0 8 0 5 0 2.4 1.6 1.1 4.1L0 3v4h4L2.6 5.6z"
+          />
+          <path
+            fill="currentColor"
+            d="M16 9h-4.1l1.5 1.4c-.9 2.1-3 3.6-5.5 3.6C5 14 2.5 11.8 2 9H0c.5 3.9 3.9 7 7.9 7 3 0 5.6-1.7 7-4.1L16 13V9z"
+          />
+        </svg>
+      </button>
     </div>
   );
 }
