@@ -1,9 +1,22 @@
 import type { BezierBoard } from '@openshaper/kernel';
 import type { BoardState } from '@openshaper/store';
-import { GizmoHelper, GizmoViewport, OrbitControls } from '@react-three/drei';
-import { Canvas } from '@react-three/fiber';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { DoubleSide, ShaderMaterial, type BufferGeometry } from 'three';
+import { GizmoHelper, GizmoViewport, TrackballControls } from '@react-three/drei';
+import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ComponentRef,
+} from 'react';
+import {
+  DoubleSide,
+  OrthographicCamera,
+  ShaderMaterial,
+  Vector3,
+  type BufferGeometry,
+} from 'three';
 import type { StoreApi } from 'zustand/vanilla';
 import { boardSpan, meshToGeometry, tessellateAsync } from './geometry';
 import { Fins3D } from './Fins3D';
@@ -63,6 +76,116 @@ export interface Board3DViewProps {
 const DEFAULT_FACE_SIZE = 0.9;
 
 const BOARD_COLOR = '#E8EEF5';
+
+/** Fit the board to roughly 80% of the viewport width in orthographic mode. */
+export const orthographicZoomFor = (viewportWidth: number, span: number): number =>
+  Math.max(0.01, viewportWidth / (span * 1.25));
+
+function OrthographicFit({ span }: { span: number }) {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    if (!(camera instanceof OrthographicCamera)) return;
+    camera.zoom = orthographicZoomFor(size.width, span);
+    camera.updateProjectionMatrix();
+  }, [camera, size.width, span]);
+  return null;
+}
+
+function TrackballNavigation({
+  initialCamera,
+  onCameraChange,
+  resetViewSequence,
+  span,
+}: {
+  initialCamera?: CameraPose;
+  onCameraChange?: (pose: CameraPose) => void;
+  resetViewSequence: number;
+  span: number;
+}) {
+  const controlsRef = useRef<ComponentRef<typeof TrackballControls>>(null);
+  const { camera, size } = useThree();
+
+  const reportPose = () => {
+    const controls = controlsRef.current;
+    if (!controls || !onCameraChange) return;
+    onCameraChange({
+      position: controls.object.position.toArray() as [number, number, number],
+      target: controls.target.toArray() as [number, number, number],
+    });
+  };
+
+  useEffect(() => {
+    if (resetViewSequence === 0) return;
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const distance = span * 1.1;
+    controls.target.set(0, 0, 0);
+    camera.position.set(0, -distance, distance * 0.45);
+    camera.up.set(0, 0, 1);
+    if (camera instanceof OrthographicCamera) {
+      camera.zoom = orthographicZoomFor(size.width, span);
+      camera.updateProjectionMatrix();
+    }
+    camera.lookAt(controls.target);
+    controls.update();
+    reportPose();
+  }, [camera, resetViewSequence, size.width, span]);
+
+  return (
+    <TrackballControls
+      ref={controlsRef}
+      makeDefault
+      rotateSpeed={4}
+      dynamicDampingFactor={0.1}
+      target={initialCamera?.target}
+      onChange={reportPose}
+    />
+  );
+}
+
+function BoardGizmo() {
+  const { camera, controls } = useThree();
+  const fallbackTarget = useMemo(() => new Vector3(), []);
+
+  const snapToAxis = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    const trackball = controls as ComponentRef<typeof TrackballControls> | null;
+    const target = trackball?.target ?? fallbackTarget;
+    const radius = camera.position.distanceTo(target);
+    if (radius <= 0) return;
+    const axis = event.object.position;
+    const ax = Math.abs(axis.x);
+    const ay = Math.abs(axis.y);
+    const az = Math.abs(axis.z);
+
+    if (az >= ax && az >= ay) {
+      const sign = Math.sign(axis.z) || 1;
+      camera.position.set(target.x, target.y, target.z + sign * radius);
+      camera.up.set(0, sign, 0);
+    } else if (ay >= ax) {
+      // Canonical profile: nose (+X) right, deck (+Z) up.
+      camera.position.set(target.x, target.y - radius, target.z);
+      camera.up.set(0, 0, 1);
+    } else {
+      const sign = Math.sign(axis.x) || 1;
+      camera.position.set(target.x + sign * radius, target.y, target.z);
+      camera.up.set(0, 0, 1);
+    }
+    camera.lookAt(target);
+    trackball?.update();
+  };
+
+  return (
+    <GizmoHelper alignment="bottom-right" margin={[56, 56]}>
+      <GizmoViewport
+        disabled
+        onPointerDown={snapToAxis}
+        axisColors={['#22D3EE', '#2DD4BF', '#A78BFA']}
+        labelColor="#E6EDF5"
+      />
+    </GizmoHelper>
+  );
+}
 
 /** Background color per lighting preset (dark room makes side-lit rails pop). */
 const BACKGROUND: Record<LightingPreset, string> = {
@@ -311,19 +434,26 @@ export function Board3DView({
   const span = board ? boardSpan(board) : 200;
   const d = span * 1.1;
   const resolved: Board3DMode = mode ?? (wireframe ? 'wireframe' : 'shaded');
+  const [resetViewSequence, setResetViewSequence] = useState(0);
 
   return (
-    <div className={className} style={{ width: '100%', height: '100%' }}>
+    <div
+      className={className}
+      style={{ width: '100%', height: '100%' }}
+      onDoubleClick={() => setResetViewSequence((sequence) => sequence + 1)}
+      title="Double-click to reset the 3D view"
+    >
       <Canvas
         dpr={[1, 2]}
+        orthographic
         camera={{
           position: initialCamera?.position ?? [0, -d, d * 0.45],
           up: [0, 0, 1],
-          fov: 35,
           near: 1,
           far: span * 50,
         }}
       >
+        <OrthographicFit span={span} />
         <color attach="background" args={[BACKGROUND[lighting]]} />
         <Lights preset={lighting} span={span} />
         {board && (
@@ -348,27 +478,13 @@ export function Board3DView({
             activeSectionX={activeSectionX}
           />
         )}
-        <OrbitControls
-          makeDefault
-          enableDamping
-          dampingFactor={0.1}
-          target={initialCamera?.target}
-          onChange={
-            onCameraChange
-              ? (e) => {
-                  const controls = e?.target;
-                  if (!controls) return;
-                  onCameraChange({
-                    position: controls.object.position.toArray() as [number, number, number],
-                    target: controls.target.toArray() as [number, number, number],
-                  });
-                }
-              : undefined
-          }
+        <TrackballNavigation
+          initialCamera={initialCamera}
+          onCameraChange={onCameraChange}
+          resetViewSequence={resetViewSequence}
+          span={span}
         />
-        <GizmoHelper alignment="bottom-right" margin={[56, 56]}>
-          <GizmoViewport axisColors={['#22D3EE', '#2DD4BF', '#A78BFA']} labelColor="#E6EDF5" />
-        </GizmoHelper>
+        <BoardGizmo />
       </Canvas>
     </div>
   );
