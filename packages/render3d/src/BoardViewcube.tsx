@@ -100,7 +100,7 @@ export function BoardViewcube({
   color = '#0F1C30',
   hoverColor = '#1E3149',
   textColor = '#22D3EE',
-  strokeColor = '#22D3EE',
+  strokeColor = '#1E3149',
   font = '40px Inter, Arial, sans-serif',
 }: BoardViewcubeProps) {
   const { gl } = useThree();

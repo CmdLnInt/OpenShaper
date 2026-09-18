@@ -190,7 +190,7 @@ function BoardGizmo({ lineColor }: { lineColor: string }) {
         color="#0F1C30"
         hoverColor="#1E3149"
         textColor={lineColor}
-        strokeColor={lineColor}
+        strokeColor="#1E3149"
       />
     </GizmoHelper>
   );
