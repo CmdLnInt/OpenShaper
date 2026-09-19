@@ -245,13 +245,23 @@ export function SelectedPointEditor({
   );
 }
 
-/** One coordinate field: commits on Enter/blur, reverts on Escape, re-syncs on edits. */
+/**
+ * One coordinate field: commits on Enter/blur, reverts on Escape, re-syncs on edits.
+ *
+ * `group` names the row this field belongs to ("Endpoint", "Tangent to next", …).
+ * Without it the wrapping `<label>` supplies the accessible name, which is the axis
+ * letter run straight into the unit suffix ("Ymm") and is repeated by all six fields.
+ * Spelled out rather than reusing the visible "Tangent ← prev": arrow glyphs do not
+ * read aloud.
+ */
 function CoordInput({
+  group,
   label,
   valueCm,
   units,
   onCommit,
 }: {
+  group: string;
   label: string;
   valueCm: number;
   units: LengthUnit;
@@ -271,6 +281,7 @@ function CoordInput({
         onValueChange={setText}
         onCommit={commit}
         onEscape={() => setText(shown)}
+        ariaLabel={`${group} ${label}`}
         className="tabular-nums"
       />
       <span className="text-xs text-muted-foreground">{unitSuffix(units)}</span>
@@ -326,12 +337,14 @@ export function ControlPointInspector({
       {/* Endpoint */}
       <div className="text-xs font-medium text-muted-foreground">Endpoint</div>
       <CoordInput
+        group="Endpoint"
         label={splineXLabel}
         valueCm={knot.end.x}
         units={units}
         onCommit={(x) => setEnd(x, knot.end.y)}
       />
       <CoordInput
+        group="Endpoint"
         label={splineYLabel}
         valueCm={knot.end.y}
         units={units}
@@ -341,12 +354,14 @@ export function ControlPointInspector({
       {/* Tangent prev (toward previous segment) */}
       <div className="text-xs font-medium text-muted-foreground">Tangent ← prev</div>
       <CoordInput
+        group="Tangent to previous"
         label={splineXLabel}
         valueCm={knot.tangentToPrev.x}
         units={units}
         onCommit={(x) => setPrev(x, knot.tangentToPrev.y)}
       />
       <CoordInput
+        group="Tangent to previous"
         label={splineYLabel}
         valueCm={knot.tangentToPrev.y}
         units={units}
@@ -356,12 +371,14 @@ export function ControlPointInspector({
       {/* Tangent next (toward next segment) */}
       <div className="text-xs font-medium text-muted-foreground">Tangent → next</div>
       <CoordInput
+        group="Tangent to next"
         label={splineXLabel}
         valueCm={knot.tangentToNext.x}
         units={units}
         onCommit={(x) => setNext(x, knot.tangentToNext.y)}
       />
       <CoordInput
+        group="Tangent to next"
         label={splineYLabel}
         valueCm={knot.tangentToNext.y}
         units={units}
