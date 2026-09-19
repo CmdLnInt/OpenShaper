@@ -25,7 +25,7 @@ import {
   type MenuItem,
   type SheetSnap,
 } from '@openshaper/ui';
-import { Menu as MenuIcon, SlidersHorizontal } from 'lucide-react';
+import { Menu as MenuIcon, Share2, SlidersHorizontal } from 'lucide-react';
 import {
   Fragment,
   lazy,
@@ -83,6 +83,7 @@ import { Brandmark } from './components/marks';
 import { CommandPalette, commandsFromMenus } from './CommandPalette';
 import { ConstructionPanel } from './ConstructionPanel';
 import { SettingsDialog } from './SettingsDialog';
+import { ShareDialog } from './ShareDialog';
 import { loadSettings, saveSettings, type EditorSettings } from './settings';
 import { CrossSectionControls } from './CrossSectionControls';
 import { LandscapeHint } from './LandscapeHint';
@@ -407,6 +408,7 @@ function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
   const [stepDialogOpen, setStepDialogOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [stepSettings, setStepSettings] = useState<StepSettings>(() => loadStep());
   const [railBandsDialogOpen, setRailBandsDialogOpen] = useState(false);
   const [railBandsSettings, setRailBandsSettings] = useState<RailBandsSettings>(() =>
@@ -607,10 +609,27 @@ function AppShell() {
     commit: () => void;
   } | null>(null);
   const toastTimer = useRef<number>();
-  const showError = (message: string) => {
+  /**
+   * Transient notice, auto-dismissed. Mostly failures (file-open, pop-up
+   * blocked), but Share reuses it to confirm a copy — same 6s toast either way.
+   */
+  const showToast = (message: string) => {
     setToast(message);
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 6000);
+  };
+
+  /**
+   * Download the board as a native `.board` document. Shared by File > Save and
+   * by the Share dialog, which offers it when a board is too large to link.
+   */
+  const saveBoardFile = () => {
+    if (!board) return;
+    downloadBoard(board, meta);
+    track('save_board', { format: 'board' });
+    markSave();
+    // downloadBoard records internally; refresh the menu's snapshot.
+    setRecentBoards(getRecentBoards());
   };
 
   /** Open a print-friendly spec sheet (board info + dimensions) in a new tab. */
@@ -620,7 +639,7 @@ function AppShell() {
     // never depends on the worker having responded yet (selectSpecs is memoized).
     const sheetSpecs = specs ?? selectSpecs(board);
     if (!openHtmlInNewTab(specSheetHtmlFor(board, sheetSpecs, meta, units, board.fins))) {
-      showError('Pop-up blocked — allow pop-ups to open the spec sheet.');
+      showToast('Pop-up blocked — allow pop-ups to open the spec sheet.');
     }
   };
 
@@ -683,7 +702,7 @@ function AppShell() {
         source: sourceExtension(file.name),
         reason: (err as Error).message.slice(0, 200),
       });
-      showError(`Could not open ${file.name}: ${(err as Error).message}`);
+      showToast(`Could not open ${file.name}: ${(err as Error).message}`);
     }
   };
 
@@ -697,7 +716,7 @@ function AppShell() {
       applyImport(file.name, warnings, () => setGhost(board));
     } catch (err) {
       console.error('Failed to open ghost board', err);
-      showError(`Could not open ${file.name}: ${(err as Error).message}`);
+      showToast(`Could not open ${file.name}: ${(err as Error).message}`);
     }
   };
 
@@ -744,7 +763,7 @@ function AppShell() {
       console.error('Failed to load recent board', err);
       // Written by us into localStorage and unreadable on the way back out.
       captureError('recent_board', err);
-      showError(`Could not reload "${entry.name}": ${(err as Error).message}`);
+      showToast(`Could not reload "${entry.name}": ${(err as Error).message}`);
     }
   };
 
@@ -806,14 +825,14 @@ function AppShell() {
       label: 'Save',
       shortcut: 'Ctrl S',
       disabled: !board,
-      onSelect: () => {
-        if (!board) return;
-        downloadBoard(board, meta);
-        track('save_board', { format: 'board' });
-        markSave();
-        // downloadBoard records internally; refresh the menu's snapshot.
-        setRecentBoards(getRecentBoards());
-      },
+      onSelect: saveBoardFile,
+    },
+    // Reaches the command palette for free — it derives from these menus.
+    {
+      kind: 'action',
+      label: 'Share…',
+      disabled: !board,
+      onSelect: () => setShareOpen(true),
     },
     { kind: 'separator' },
     // Open recent: one named entry per recorded board, newest first.
@@ -1239,6 +1258,21 @@ function AppShell() {
             <Menu label="Export" items={exportMenu} />
             <Menu label="Help" items={helpMenu} />
           </MenuBar>
+          {/* Sharing is the one action aimed at someone who is not in the room,
+              so it gets a button of its own rather than living only in a menu.
+              The label drops below sm, where the menubar is a hamburger. */}
+          <Button
+            size="sm"
+            variant="secondary"
+            className="shrink-0"
+            disabled={!board}
+            title="Share this board as a link"
+            aria-label="Share board"
+            onClick={() => setShareOpen(true)}
+          >
+            <Share2 className="size-4" />
+            <span className="hidden sm:inline">Share</span>
+          </Button>
           {!isShort && <div className="flex-1" />}
           {SUPPORT_URL && !isShort && (
             <a
@@ -1459,6 +1493,23 @@ function AppShell() {
           settings={settings}
           onSave={handleSaveSettings}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {shareOpen && board && (
+        <ShareDialog
+          board={board as BezierBoard}
+          meta={meta}
+          setMeta={setMeta}
+          onCopied={() => {
+            setShareOpen(false);
+            showToast('Share link copied');
+            // Count only. No property here may derive from the URL, the board,
+            // its metadata or its dimensions — see docs/design/analytics.md.
+            track('share_link_copied');
+          }}
+          onDownloadBoard={saveBoardFile}
+          onClose={() => setShareOpen(false)}
         />
       )}
 
