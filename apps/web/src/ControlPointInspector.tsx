@@ -52,7 +52,14 @@ const targetLabel = (t: SplineTarget): string => {
   }
 };
 
-/** Domain-axis names. Cross-sections lie in the board's transverse Y-Z plane. */
+/**
+ * Display names for a target spline's own x and y, as board axes.
+ *
+ * Outline is length × half-width, deck and bottom are length × height, and a
+ * cross-section lies in the board's transverse Y-Z plane. Deliberately not
+ * "horizontal"/"vertical": a phone pane draws the board turned nose-up, so the
+ * spline's x is the axis running *up* the screen there (see `turnFitsLarger`).
+ */
 const coordinateLabels = (target: SplineTarget): readonly [string, string] =>
   target.kind === 'crossSection' ? ['Y', 'Z'] : ['X', target.kind === 'outline' ? 'Y' : 'Z'];
 
@@ -207,7 +214,7 @@ export function SelectedPointEditor({
       store.getState().moveControlPoint(selection.target, selection.index, { x, y });
     else store.getState().moveTangent(selection.target, selection.index, kind, { x, y });
   };
-  const [horizontalLabel, verticalLabel] = coordinateLabels(selection.target);
+  const [splineXLabel, splineYLabel] = coordinateLabels(selection.target);
 
   return (
     // min-w-0 + horizontal scroll (never wrap): this sits in a fixed-height pane
@@ -218,7 +225,7 @@ export function SelectedPointEditor({
     >
       <span className="shrink-0 text-xs font-medium text-foreground">{label}</span>
       <HeaderCoordInput
-        label={horizontalLabel}
+        label={splineXLabel}
         valueCm={point.x}
         units={units}
         onCommit={(x) => commit(x, point.y)}
@@ -226,7 +233,7 @@ export function SelectedPointEditor({
         onNudge={nudge}
       />
       <HeaderCoordInput
-        label={verticalLabel}
+        label={splineYLabel}
         valueCm={point.y}
         units={units}
         onCommit={(y) => commit(point.x, y)}
@@ -301,7 +308,7 @@ export function ControlPointInspector({
   if (!knot) return null; // selection went stale (e.g. just deleted)
 
   const { target, index } = selection;
-  const [horizontalLabel, verticalLabel] = coordinateLabels(target);
+  const [splineXLabel, splineYLabel] = coordinateLabels(target);
   const deletable = canDeleteKnot(spline, index);
   const setEnd = (x: number, y: number) =>
     store.getState().moveControlPoint(target, index, { x, y });
@@ -319,13 +326,13 @@ export function ControlPointInspector({
       {/* Endpoint */}
       <div className="text-xs font-medium text-muted-foreground">Endpoint</div>
       <CoordInput
-        label={horizontalLabel}
+        label={splineXLabel}
         valueCm={knot.end.x}
         units={units}
         onCommit={(x) => setEnd(x, knot.end.y)}
       />
       <CoordInput
-        label={verticalLabel}
+        label={splineYLabel}
         valueCm={knot.end.y}
         units={units}
         onCommit={(y) => setEnd(knot.end.x, y)}
@@ -334,13 +341,13 @@ export function ControlPointInspector({
       {/* Tangent prev (toward previous segment) */}
       <div className="text-xs font-medium text-muted-foreground">Tangent ← prev</div>
       <CoordInput
-        label={horizontalLabel}
+        label={splineXLabel}
         valueCm={knot.tangentToPrev.x}
         units={units}
         onCommit={(x) => setPrev(x, knot.tangentToPrev.y)}
       />
       <CoordInput
-        label={verticalLabel}
+        label={splineYLabel}
         valueCm={knot.tangentToPrev.y}
         units={units}
         onCommit={(y) => setPrev(knot.tangentToPrev.x, y)}
@@ -349,13 +356,13 @@ export function ControlPointInspector({
       {/* Tangent next (toward next segment) */}
       <div className="text-xs font-medium text-muted-foreground">Tangent → next</div>
       <CoordInput
-        label={horizontalLabel}
+        label={splineXLabel}
         valueCm={knot.tangentToNext.x}
         units={units}
         onCommit={(x) => setNext(x, knot.tangentToNext.y)}
       />
       <CoordInput
-        label={verticalLabel}
+        label={splineYLabel}
         valueCm={knot.tangentToNext.y}
         units={units}
         onCommit={(y) => setNext(knot.tangentToNext.x, y)}

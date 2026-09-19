@@ -210,6 +210,30 @@ describe('<ControlPointInspector />', () => {
     // The input should re-sync to the original value.
     expect(prevXInput.value).toBe(originalValue);
   });
+
+  // Every other test in this block selects the outline, whose labels are X/Y either
+  // way — so without these two the whole panel could revert to hardcoded X/Y with
+  // the suite still green. Each row (endpoint, tangent ← prev, tangent → next)
+  // contributes one field per axis, hence 3.
+  it.each([
+    [{ kind: 'crossSection', index: 1 } as const, 'Y', 'Z', 'X'],
+    [{ kind: 'deck' } as const, 'X', 'Z', 'Y'],
+  ])('labels %o coordinates as board axes', (target, across, up, absent) => {
+    const store = createBoardStore();
+    act(() => {
+      store.getState().load(makeBoard());
+      store.getState().select({ target, index: 1 });
+    });
+
+    render(<ControlPointInspector store={store} units={DEFAULT_LENGTH_UNIT} />);
+
+    // A CoordInput's <label> wraps both the axis letter and the unit suffix, so its
+    // accessible name is e.g. "Ymm" — match on the leading axis letter.
+    const axis = (a: string) => new RegExp(`^${a}`);
+    expect(screen.getAllByLabelText(axis(across))).toHaveLength(3);
+    expect(screen.getAllByLabelText(axis(up))).toHaveLength(3);
+    expect(screen.queryAllByLabelText(axis(absent))).toHaveLength(0);
+  });
 });
 
 describe('<SelectedPointEditor />', () => {
