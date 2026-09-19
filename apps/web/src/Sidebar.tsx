@@ -9,6 +9,7 @@ import type { InterpolationType } from '@openshaper/kernel';
 import type { BoardSpecs } from '@openshaper/store';
 import {
   Button,
+  Checkbox,
   Input,
   Panel,
   PanelBody,
@@ -517,6 +518,17 @@ function TracePanel({
         </div>
         {img && (
           <>
+            {/* Visible, not loaded: the image stays in place either way, so a
+                trace hidden to look at a shared board comes straight back. */}
+            <label className="flex items-center gap-2">
+              <Checkbox
+                checked={trace.visible[view]}
+                onChange={(e) => trace.setVisible(view, e.target.checked)}
+              />
+              <span className="text-muted-foreground">
+                Show {view === 'outline' ? 'outline' : 'rocker'} trace
+              </span>
+            </label>
             <label className="flex items-center gap-2">
               <span className="w-14 text-muted-foreground">Opacity</span>
               <input

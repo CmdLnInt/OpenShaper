@@ -8,10 +8,11 @@ export default function DocsFiles() {
     <DocsPage
       route="/docs/files"
       title="Files & templates"
-      lede="Starter templates, saving and opening, importing from Shape3d and BoardCAD, and where your work is kept."
+      lede="Starter templates, saving and opening, sharing a link, importing from Shape3d and BoardCAD, and where your work is kept."
       toc={[
         { id: 'templates', label: 'Starter templates' },
         { id: 'saving', label: 'Saving & opening' },
+        { id: 'share', label: 'Sharing a link' },
         { id: 'import', label: 'Importing from other tools' },
         { id: 'warnings', label: 'Import warnings' },
         { id: 'storage', label: 'Where your work is kept' },
@@ -46,6 +47,47 @@ export default function DocsFiles() {
         <p>
           Saving downloads a file through the browser. Recently opened boards are listed so you can
           get back to them without hunting through a downloads folder.
+        </p>
+      </Section>
+
+      <Section id="share" title="Sharing a link">
+        <p>
+          <strong>Share</strong> — in the top bar, or File → Share… — turns the board on screen into
+          a link. The whole board travels <em>inside</em> the link, so there is no upload, no
+          account and nothing stored on a server. Anyone who opens it gets an editable copy in their
+          own browser.
+        </p>
+        <p>
+          It is a snapshot, not a shared document. Editing your board afterwards does not change
+          what the link opens, and a link cannot be updated or revoked once you have sent it. If you
+          need someone to see a later version, send a new link.
+        </p>
+        <Terms>
+          <Term name="What travels">
+            The outline, rocker and every cross-section; the interpolation type and the fin setup;
+            and the full Board Info — designer, model, surfer, comments, fin and foam type, glass
+            schedule. Anyone with the link can read all of it, so treat the designer and surfer
+            fields as public.
+          </Term>
+          <Term name="What does not">
+            Trace images and any other image data, the comparison ghost board, undo history, your
+            recent boards, and your own settings — units, camera, overlays and appearance. Opening a
+            shared board also hides your own trace images so they do not sit under someone else's
+            outline; they are hidden, not deleted, and the Trace image panel turns them back on.
+          </Term>
+        </Terms>
+        <p>
+          A normal board makes a link of roughly three kilobytes. Past 30,000 characters the app
+          warns that some forums may truncate or reject it, and past 50,000 it will not make one at
+          all — send the <code>.board</code> file instead. A URL shortener such as TinyURL may help
+          with a long link, but be aware it receives the complete board link, and may not accept or
+          preserve it; OpenShaper never submits your link anywhere by itself.
+        </p>
+        <p>
+          Share links need a current browser (they use the built-in Compression Streams APIs). In an
+          older one the app says so and offers the <code>.board</code> file instead. Link previews
+          show the generic OpenShaper card — a preview image of the board itself is not something a
+          link-only design can produce.
         </p>
       </Section>
 

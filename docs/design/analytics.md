@@ -508,11 +508,36 @@ Three rules govern every event:
 | `rail_bands_opened`     | —                                                                                                                        | The dialog asks for a marking mode before it gives anything — see below    |
 | `rail_bands_exported`   | `angle_mode`, `manual_by`, `bands`, `stations`, `paper`, `detail_pages`, `varied_along_board`, `cuts_inside`, `warnings` | …and this is a shaper who got through it                                   |
 | `spec_sheet_opened`     | —                                                                                                                        | Cheapest thing in the Export menu; the floor the others are read against   |
+| `share_link_copied`     | —                                                                                                                        | Whether share links are made at all; strictly count-only, see below        |
+| `shared_board_opened`   | —                                                                                                                        | The other half of the pair: whether a link ever reaches anyone             |
 | `trace_image_loaded`    | `target`                                                                                                                 | Distinctive feature, zero prior visibility                                 |
 | `consent_banner`        | `action` (`shown` \| `accepted` \| `rejected`)                                                                           | Distinguishes bad copy from a banner nobody sees                           |
 | `landscape_hint`        | `action` (`shown` \| `dismissed`)                                                                                        | Whether the cheapest phone win is one anybody takes                        |
 | `pwa_installed`         | —                                                                                                                        | The install conversion; fires online, so unlike offline usage it sends     |
 | `session_summary`       | `edits`, `views_used`, `view_count`, `exported`, `saved`, `imported`, `template_used`, `duration_s`                      | Session depth without a per-action stream                                  |
+
+### Share links carry nothing but the fact that one happened
+
+`share_link_copied` (`App.tsx`, from `ShareDialog.tsx`) and `shared_board_opened`
+(`App.tsx`, when a shared link is adopted) both have no properties at all. That is
+stricter than rule 1 above, deliberately.
+
+A share link is a URL fragment holding a gzipped board plus its full Board Info
+— designer and surfer names included. Rule 1 would already forbid sending the
+board name, but here even the _shape_ of the thing is a leak risk: a link length
+is a board fingerprint, and a property derived from the payload is one refactor
+away from being the payload. So the rule for these two events is absolute —
+**nothing derived from the URL, the board, its metadata, its dimensions or the
+payload** — and the count alone is the whole signal. It answers the only
+question worth asking of the feature: does anyone use it?
+
+The same reasoning runs through the feature itself. The fragment is stripped
+from the address bar at module scope in `main.tsx`, above `ViteReactSSG(...)`
+and so before `initAnalytics()` can read `window.location` — a board must never
+reach `$current_url`, a referrer or a replay. The share dialog and its
+manual-copy field both carry `ph-no-capture`. And a failed share link produces a
+plain error message: never the payload, never the raw parser error.
+See `docs/design/share-link.md`.
 
 ### Rail bands, and the two questions it was built to answer
 
