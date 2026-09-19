@@ -1,11 +1,26 @@
 import type { BezierBoard } from '@openshaper/kernel';
 import type { BoardState } from '@openshaper/store';
-import { GizmoHelper, GizmoViewport, OrbitControls } from '@react-three/drei';
-import { Canvas } from '@react-three/fiber';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { DoubleSide, ShaderMaterial, type BufferGeometry } from 'three';
+import { GizmoHelper, TrackballControls } from '@react-three/drei';
+import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ComponentRef,
+} from 'react';
+import {
+  DoubleSide,
+  OrthographicCamera,
+  ShaderMaterial,
+  Vector3,
+  type BufferGeometry,
+} from 'three';
 import type { StoreApi } from 'zustand/vanilla';
 import { boardSpan, meshToGeometry, tessellateAsync } from './geometry';
+import { BoardViewcube } from './BoardViewcube';
+import { orthographicZoomFor, upForViewDirection } from './view-framing';
 import { Fins3D } from './Fins3D';
 import { Guides3D } from './Guides3D';
 
@@ -36,6 +51,8 @@ export interface Board3DViewProps {
   color?: string;
   /** Fin blade color (defaults to the brand cyan). */
   finColor?: string;
+  /** View-cube labels and borders (defaults to the primary 2D curve color). */
+  viewCubeLineColor?: string;
   /** Surface-analysis overlay (defaults to 'none'). */
   analysis?: AnalysisMode;
   /** Target tessellation face size in cm (smaller = finer mesh). Defaults to ~0.9 cm. */
@@ -63,6 +80,131 @@ export interface Board3DViewProps {
 const DEFAULT_FACE_SIZE = 0.9;
 
 const BOARD_COLOR = '#E8EEF5';
+
+/** Gizmo placement, shared by the view cube and the flip button stacked above it. */
+const GIZMO_MARGIN = 56;
+const FLIP_BUTTON_SIZE = 60;
+
+/**
+ * Frame the board to the view, for as long as the framing is still ours.
+ *
+ * An orthographic `camera.zoom` assignment is absolute, so refitting on every
+ * `size.width` change would throw away whatever the user had scrolled to — and
+ * `size.width` changes on every pane resize, maximise and quad/single switch.
+ * Fitting only once is no good either: this pane first mounts inside the quad
+ * layout, so a one-shot fit sizes the board for a quarter-width pane and leaves
+ * it stranded there when the user opens the full-width 3D view.
+ *
+ * So: keep refitting while `camera.zoom` is the value we last wrote, and stand
+ * down permanently once it isn't — that difference *is* the user having zoomed.
+ * `initialCamera` gets a fit like any other mount; a restored `CameraPose`
+ * carries position and target but no zoom, so there is nothing of theirs to keep.
+ */
+function OrthographicFit({ span }: { span: number }) {
+  const { camera, size } = useThree();
+  const applied = useRef<number | null>(null);
+  useEffect(() => {
+    if (!(camera instanceof OrthographicCamera) || size.width <= 0) return;
+    if (applied.current !== null && Math.abs(camera.zoom - applied.current) > 1e-6) return;
+    const zoom = orthographicZoomFor(size.width, span);
+    applied.current = zoom;
+    camera.zoom = zoom;
+    camera.updateProjectionMatrix();
+  }, [camera, size.width, span]);
+  return null;
+}
+
+function TrackballNavigation({
+  initialCamera,
+  onCameraChange,
+  flipViewSequence,
+}: {
+  initialCamera?: CameraPose;
+  onCameraChange?: (pose: CameraPose) => void;
+  flipViewSequence: number;
+}) {
+  const controlsRef = useRef<ComponentRef<typeof TrackballControls>>(null);
+  const { camera } = useThree();
+
+  const reportPose = () => {
+    const controls = controlsRef.current;
+    if (!controls || !onCameraChange) return;
+    onCameraChange({
+      position: controls.object.position.toArray() as [number, number, number],
+      target: controls.target.toArray() as [number, number, number],
+    });
+  };
+
+  useEffect(() => {
+    if (flipViewSequence === 0) return;
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const offset = camera.position.sub(controls.target);
+    offset.y *= -1;
+    offset.z *= -1;
+    camera.position.add(controls.target);
+    camera.up.y *= -1;
+    camera.up.z *= -1;
+    camera.lookAt(controls.target);
+    controls.update();
+    reportPose();
+  }, [camera, flipViewSequence]);
+
+  return (
+    <TrackballControls
+      ref={controlsRef}
+      makeDefault
+      rotateSpeed={4}
+      staticMoving
+      cursorZoom
+      // three-stdlib's orthographic zoom-out guard compares zoom against
+      // maxDistance squared. Its Infinity default therefore blocks all zoom-out.
+      // Orthographic controls do not otherwise use camera distance limits.
+      maxDistance={0}
+      target={initialCamera?.target}
+      onChange={reportPose}
+    />
+  );
+}
+
+function BoardGizmo({ lineColor }: { lineColor: string }) {
+  const { camera, controls } = useThree();
+  const fallbackTarget = useMemo(() => new Vector3(), []);
+
+  const snapToView = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    const trackball = controls as ComponentRef<typeof TrackballControls> | null;
+    const target = trackball?.target ?? fallbackTarget;
+    const radius = camera.position.distanceTo(target);
+    if (radius <= 0) return null;
+
+    // Faces expose their direction through the hit normal. Edge and corner hit
+    // meshes are positioned in the direction they represent.
+    const direction = event.object.position.lengthSq()
+      ? event.object.position.clone()
+      : event.face?.normal.clone();
+    if (!direction?.lengthSq()) return null;
+    direction.normalize();
+
+    camera.position.copy(target).addScaledVector(direction, radius);
+    camera.up.set(...upForViewDirection(direction));
+    camera.lookAt(target);
+    trackball?.update();
+    return null;
+  };
+
+  return (
+    <GizmoHelper alignment="bottom-right" margin={[GIZMO_MARGIN, GIZMO_MARGIN]}>
+      <BoardViewcube
+        onClick={snapToView}
+        color="#0F1C30"
+        hoverColor="#1E3149"
+        textColor={lineColor}
+        strokeColor="#1E3149"
+      />
+    </GizmoHelper>
+  );
+}
 
 /** Background color per lighting preset (dark room makes side-lit rails pop). */
 const BACKGROUND: Record<LightingPreset, string> = {
@@ -297,6 +439,7 @@ export function Board3DView({
   material = 'gloss',
   color = BOARD_COLOR,
   finColor,
+  viewCubeLineColor = '#22D3EE',
   analysis = 'none',
   targetFaceSize = DEFAULT_FACE_SIZE,
   showStringer = false,
@@ -311,19 +454,22 @@ export function Board3DView({
   const span = board ? boardSpan(board) : 200;
   const d = span * 1.1;
   const resolved: Board3DMode = mode ?? (wireframe ? 'wireframe' : 'shaded');
+  const [flipViewSequence, setFlipViewSequence] = useState(0);
+  const [flipHovered, setFlipHovered] = useState(false);
 
   return (
-    <div className={className} style={{ width: '100%', height: '100%' }}>
+    <div className={className} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <Canvas
         dpr={[1, 2]}
+        orthographic
         camera={{
           position: initialCamera?.position ?? [0, -d, d * 0.45],
           up: [0, 0, 1],
-          fov: 35,
           near: 1,
           far: span * 50,
         }}
       >
+        <OrthographicFit span={span} />
         <color attach="background" args={[BACKGROUND[lighting]]} />
         <Lights preset={lighting} span={span} />
         {board && (
@@ -348,29 +494,53 @@ export function Board3DView({
             activeSectionX={activeSectionX}
           />
         )}
-        <OrbitControls
-          makeDefault
-          enableDamping
-          dampingFactor={0.1}
-          zoomToCursor
-          target={initialCamera?.target}
-          onChange={
-            onCameraChange
-              ? (e) => {
-                  const controls = e?.target;
-                  if (!controls) return;
-                  onCameraChange({
-                    position: controls.object.position.toArray() as [number, number, number],
-                    target: controls.target.toArray() as [number, number, number],
-                  });
-                }
-              : undefined
-          }
+        <TrackballNavigation
+          initialCamera={initialCamera}
+          onCameraChange={onCameraChange}
+          flipViewSequence={flipViewSequence}
         />
-        <GizmoHelper alignment="bottom-right" margin={[56, 56]}>
-          <GizmoViewport axisColors={['#22D3EE', '#2DD4BF', '#A78BFA']} labelColor="#E6EDF5" />
-        </GizmoHelper>
+        <BoardGizmo lineColor={viewCubeLineColor} />
       </Canvas>
+      <button
+        type="button"
+        onClick={() => setFlipViewSequence((sequence) => sequence + 1)}
+        onMouseEnter={() => setFlipHovered(true)}
+        onMouseLeave={() => setFlipHovered(false)}
+        style={{
+          position: 'absolute',
+          // Centred on the gizmo's column, one button-height above it.
+          right: GIZMO_MARGIN - FLIP_BUTTON_SIZE / 2,
+          bottom: GIZMO_MARGIN + FLIP_BUTTON_SIZE,
+          zIndex: 1,
+          border: 0,
+          padding: 0,
+          background: 'transparent',
+          // The cube's own label colour: the scene background is near-black, so the
+          // panel navy this used to draw in came out at 1.08:1 against it.
+          color: viewCubeLineColor,
+          opacity: flipHovered ? 1 : 0.75,
+          cursor: 'pointer',
+        }}
+        aria-label="Flip view"
+        title="Flip the view 180° around the board length axis"
+      >
+        <svg
+          width={FLIP_BUTTON_SIZE}
+          height={FLIP_BUTTON_SIZE}
+          viewBox="0 0 16 16"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            fill="currentColor"
+            d="M2.6 5.6c.9-2.1 3-3.6 5.4-3.6 3 0 5.4 2.2 5.9 5h2C15.4 3.1 12.1 0 8 0 5 0 2.4 1.6 1.1 4.1L0 3v4h4L2.6 5.6z"
+          />
+          <path
+            fill="currentColor"
+            d="M16 9h-4.1l1.5 1.4c-.9 2.1-3 3.6-5.5 3.6C5 14 2.5 11.8 2 9H0c.5 3.9 3.9 7 7.9 7 3 0 5.6-1.7 7-4.1L16 13V9z"
+          />
+        </svg>
+      </button>
     </div>
   );
 }
