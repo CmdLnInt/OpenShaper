@@ -164,7 +164,7 @@ describe('cross-section station controls', () => {
     expect(screen.getByLabelText(/handle position editor/)).toBeTruthy();
     expect(screen.queryAllByRole('textbox', { name: 'Selected slice position' })).toHaveLength(0);
 
-    fireEvent.keyDown(screen.getByLabelText('X position'), { key: 'Escape' });
+    fireEvent.keyDown(screen.getByLabelText('Y position'), { key: 'Escape' });
 
     expect(boardStore.getState().selection).toBeNull();
     expect(screen.queryByLabelText(/handle position editor/)).toBeNull();

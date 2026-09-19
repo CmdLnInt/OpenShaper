@@ -52,6 +52,10 @@ const targetLabel = (t: SplineTarget): string => {
   }
 };
 
+/** Domain-axis names. Cross-sections lie in the board's transverse Y-Z plane. */
+const coordinateLabels = (target: SplineTarget): readonly [string, string] =>
+  target.kind === 'crossSection' ? ['Y', 'Z'] : ['X', target.kind === 'outline' ? 'Y' : 'Z'];
+
 const sameTarget = (a: SplineTarget, b: SplineTarget): boolean =>
   a.kind === b.kind && (a.kind !== 'crossSection' || (b as { index: number }).index === a.index);
 
@@ -203,6 +207,7 @@ export function SelectedPointEditor({
       store.getState().moveControlPoint(selection.target, selection.index, { x, y });
     else store.getState().moveTangent(selection.target, selection.index, kind, { x, y });
   };
+  const [horizontalLabel, verticalLabel] = coordinateLabels(selection.target);
 
   return (
     // min-w-0 + horizontal scroll (never wrap): this sits in a fixed-height pane
@@ -213,7 +218,7 @@ export function SelectedPointEditor({
     >
       <span className="shrink-0 text-xs font-medium text-foreground">{label}</span>
       <HeaderCoordInput
-        label="X"
+        label={horizontalLabel}
         valueCm={point.x}
         units={units}
         onCommit={(x) => commit(x, point.y)}
@@ -221,7 +226,7 @@ export function SelectedPointEditor({
         onNudge={nudge}
       />
       <HeaderCoordInput
-        label="Y"
+        label={verticalLabel}
         valueCm={point.y}
         units={units}
         onCommit={(y) => commit(point.x, y)}
@@ -296,6 +301,7 @@ export function ControlPointInspector({
   if (!knot) return null; // selection went stale (e.g. just deleted)
 
   const { target, index } = selection;
+  const [horizontalLabel, verticalLabel] = coordinateLabels(target);
   const deletable = canDeleteKnot(spline, index);
   const setEnd = (x: number, y: number) =>
     store.getState().moveControlPoint(target, index, { x, y });
@@ -313,13 +319,13 @@ export function ControlPointInspector({
       {/* Endpoint */}
       <div className="text-xs font-medium text-muted-foreground">Endpoint</div>
       <CoordInput
-        label="X"
+        label={horizontalLabel}
         valueCm={knot.end.x}
         units={units}
         onCommit={(x) => setEnd(x, knot.end.y)}
       />
       <CoordInput
-        label="Y"
+        label={verticalLabel}
         valueCm={knot.end.y}
         units={units}
         onCommit={(y) => setEnd(knot.end.x, y)}
@@ -328,13 +334,13 @@ export function ControlPointInspector({
       {/* Tangent prev (toward previous segment) */}
       <div className="text-xs font-medium text-muted-foreground">Tangent ← prev</div>
       <CoordInput
-        label="X"
+        label={horizontalLabel}
         valueCm={knot.tangentToPrev.x}
         units={units}
         onCommit={(x) => setPrev(x, knot.tangentToPrev.y)}
       />
       <CoordInput
-        label="Y"
+        label={verticalLabel}
         valueCm={knot.tangentToPrev.y}
         units={units}
         onCommit={(y) => setPrev(knot.tangentToPrev.x, y)}
@@ -343,13 +349,13 @@ export function ControlPointInspector({
       {/* Tangent next (toward next segment) */}
       <div className="text-xs font-medium text-muted-foreground">Tangent → next</div>
       <CoordInput
-        label="X"
+        label={horizontalLabel}
         valueCm={knot.tangentToNext.x}
         units={units}
         onCommit={(x) => setNext(x, knot.tangentToNext.y)}
       />
       <CoordInput
-        label="Y"
+        label={verticalLabel}
         valueCm={knot.tangentToNext.y}
         units={units}
         onCommit={(y) => setNext(knot.tangentToNext.x, y)}
