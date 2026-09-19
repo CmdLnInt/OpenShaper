@@ -23,3 +23,14 @@ export {
   BOARD_JSON_VERSION,
   type BoardJson,
 } from './board-json';
+export {
+  encodeShareFragment,
+  decodeShareFragment,
+  shareCodecSupported,
+  ShareLinkError,
+  SHARE_ENVELOPE_VERSION,
+  SHARE_URL_WARN_CHARS,
+  SHARE_URL_MAX_CHARS,
+  SHARE_DECODED_MAX_BYTES,
+  type ShareLinkErrorCode,
+} from './share-link';
