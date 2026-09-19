@@ -38,7 +38,12 @@
       > `DxfExport`, `StlExport`, `GCodeDraw` and a dead `PdfDraw`. This was new
       > work, so the golden-data rule's porting phase never applied to it.
 
-   3. **Share-by-URL** — encode a board into a link, no backend, no account.
+   3. **Share-by-URL (done).** A board encoded into an `/app#board=v1.…`
+      fragment — gzip + Base64URL over the native `.board.json`, no backend and
+      no account. The fragment is stripped at module scope before analytics
+      initializes, so a board never reaches `$current_url` or session replay,
+      and decoding is capped on both the encoded and the decompressed side.
+      See `docs/design/share-link.md`.
    4. **i18n** — legacy shipped 6 locales (en, es, fr, nl, no, pt); we are English-only.
 
 8. **CAM / G-code** (after phase 7): port the last big legacy domain — `MachineConfig`,

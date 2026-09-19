@@ -69,6 +69,44 @@ test.describe('offline editor', () => {
     await expect(fresh.getByRole('heading', { level: 1 })).toContainText(/shortcuts/i);
   });
 
+  /**
+   * The strongest claim the share feature makes, stated as a test: the link
+   * *is* the board. Nothing is fetched to open one, so a cached editor can
+   * open a shared design with the network cut entirely.
+   */
+  test('a shared link opens with no network at all', async ({ page, context }) => {
+    await warmServiceWorker(page);
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    // Make a link while still online — only the editor itself needs the network.
+    await page.getByRole('button', { name: 'Share board' }).click();
+    await page.getByLabel('Board model').fill('Offline Fish');
+    await expect(page.getByText(/Link size:/)).toBeVisible();
+    await page.getByRole('button', { name: 'Copy link' }).click();
+    const link = await page.evaluate(() => navigator.clipboard.readText());
+    expect(link).toContain('/app#board=v1.');
+
+    await context.setOffline(true);
+
+    const fresh = await context.newPage();
+    const errors = trackErrors(fresh);
+    await fresh.goto(link).catch(() => {
+      /* offline navigations may reject even when the SW answers */
+    });
+
+    // This tab shares the context's IndexedDB, so the warm page's autosaved
+    // session is already there — which makes this the confirm path, exercised
+    // with no network. Asserted rather than skipped past: if the prompt ever
+    // stops appearing, that is a precedence regression worth failing on.
+    await expect(fresh.getByText('Open shared board?')).toBeVisible();
+    await fresh.getByRole('button', { name: 'Open shared board' }).click();
+
+    await expect(fresh.getByText(/Shared board opened as an editable copy/)).toBeVisible();
+    await expect(fresh.getByLabel(/^model$/i)).toHaveValue('Offline Fish');
+    await expect(fresh.getByText(/Unexpected Application Error/i)).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test('marketing routes fall back to the branded offline page', async ({ page, context }) => {
     await warmServiceWorker(page);
     await context.setOffline(true);

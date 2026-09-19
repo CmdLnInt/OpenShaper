@@ -1,5 +1,5 @@
 import { stepExportSupport } from '@openshaper/export';
-import { parseBrd, readBoardJson, writeBoardJson } from '@openshaper/io';
+import { decodeShareFragment, parseBrd, readBoardJson, writeBoardJson } from '@openshaper/io';
 import {
   loftCrossSection,
   getLength,
@@ -84,6 +84,9 @@ import { CommandPalette, commandsFromMenus } from './CommandPalette';
 import { ConstructionPanel } from './ConstructionPanel';
 import { SettingsDialog } from './SettingsDialog';
 import { ShareDialog } from './ShareDialog';
+import { SharedBoardPrompt } from './SharedBoardPrompt';
+import { clearSharedPayload, peekSharedPayload } from './share-bootstrap';
+import { shareLinkMessage } from './share-url';
 import { loadSettings, saveSettings, type EditorSettings } from './settings';
 import { CrossSectionControls } from './CrossSectionControls';
 import { LandscapeHint } from './LandscapeHint';
@@ -93,7 +96,7 @@ import sampleBrd from './sample-board.brd?raw';
 import { boardStore } from './store';
 import { SUPPORT_URL } from './support';
 import { BOARD_TEMPLATES } from './templates';
-import { clampSectionIndex } from './section-index';
+import { clampSectionIndex, nearestMidpointSection } from './section-index';
 import { VIEW_KEYS } from './shortcuts';
 import { useKeyboardShortcuts } from './use-keyboard-shortcuts';
 import { useSettledBoard } from './use-settled-board';
@@ -152,15 +155,26 @@ function AppShell() {
   // off (`hydrated`) until the decision lands, so a slow load can't be
   // clobbered by an autosave of the empty/sample state.
   const hydrated = useRef(false);
+  /**
+   * A decoded shared board waiting on the "replace your work?" question. It is
+   * held here, never in boardStore, until the user says yes — which is what
+   * makes *Keep current* a true no-op and lets autosave keep running
+   * underneath without blurring the two choices.
+   */
+  const [pendingShare, setPendingShare] = useState<{
+    board: BezierBoard;
+    metadata?: Record<string, unknown>;
+  } | null>(null);
+
   useEffect(() => {
     if (boardStore.getState().board) {
       hydrated.current = true;
       return;
     }
     let cancelled = false;
-    void (async () => {
-      const session = await loadSession();
-      if (cancelled) return;
+
+    /** Restore the autosaved workspace; fall back to the bundled sample. */
+    const restoreOrSample = (session: Awaited<ReturnType<typeof loadSession>>): boolean => {
       if (session) {
         try {
           const { board: sBoard, metadata } = readBoardJson(session.boardJson);
@@ -176,7 +190,7 @@ function AppShell() {
           boardStore.getState().load(sBoard);
           setMeta((metadata as BoardMeta) ?? {});
           if (sGhost) setGhost(sGhost);
-          return;
+          return true;
         } catch (e) {
           console.error('Failed to restore session', e);
           // The visitor's own work failing to come back. The JSON is ours, so
@@ -193,6 +207,40 @@ function AppShell() {
         // A bundled asset we ship failing to parse — the editor opens empty.
         captureError('sample_board', e);
       }
+      return false;
+    };
+
+    void (async () => {
+      // Startup precedence (docs/design/share-link.md §2.3): decode the link
+      // first, but touch nothing until the session read has resolved, so the
+      // "is there work to lose?" question is answered before it is asked.
+      const payload = peekSharedPayload();
+      const session = await loadSession();
+      if (cancelled) return;
+
+      let shared: { board: BezierBoard; metadata?: Record<string, unknown> } | null = null;
+      if (payload) {
+        try {
+          shared = await decodeShareFragment(payload);
+        } catch (e) {
+          // A bad link is a bad input, not our bug — so a message, not a
+          // captureError, and never the payload or the parser's own words.
+          clearSharedPayload();
+          showToast(shareLinkMessage(e));
+        }
+        if (cancelled) return;
+      }
+
+      // A valid link into an empty browser opens straight away: there is
+      // nothing to replace, so there is nothing to ask about.
+      if (shared && !session) {
+        adoptRef.current(shared.board, shared.metadata);
+        return;
+      }
+
+      const hadSession = restoreOrSample(session);
+      if (shared && hadSession) setPendingShare(shared);
+      else if (shared) adoptRef.current(shared.board, shared.metadata);
     })();
     return () => {
       cancelled = true;
@@ -433,6 +481,19 @@ function AppShell() {
   );
   const sendViewCmd = (kind: 'fit' | 'lifeSize') =>
     setViewCmd((cur) => ({ seq: (cur?.seq ?? 0) + 1, kind }));
+
+  // Board3DView reads `initialCamera` once, as the Canvas's initial state, so
+  // "reset the 3D camera" means clearing the stored pose and remounting the
+  // pane. Bumping this key is that remount.
+  const [cameraEpoch, setCameraEpoch] = useState(0);
+  // Fitting the 2D panes has to wait for them to exist: adopting a shared board
+  // switches to Quad in the same batch, so the fit is deferred to the effect
+  // that runs once those panes have mounted.
+  const [fitEpoch, setFitEpoch] = useState(0);
+  useEffect(() => {
+    if (fitEpoch > 0) sendViewCmd('fit');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitEpoch]);
 
   // Recent boards: re-read from localStorage whenever the menu is constructed so
   // it stays in sync with saves/opens from this session.
@@ -766,6 +827,62 @@ function AppShell() {
       showToast(`Could not reload "${entry.name}": ${(err as Error).message}`);
     }
   };
+
+  /**
+   * Open a shared board as the working document.
+   *
+   * Presentation is reset rather than inherited: the sender's framing, camera
+   * and selected station are artifacts of their editing session, not a view of
+   * the board. The recipient's own units and 3D appearance settings are left
+   * alone — those are preferences, not state belonging to this board.
+   */
+  const adoptSharedBoard = (sBoard: BezierBoard, metadata?: Record<string, unknown>) => {
+    const sMeta = (metadata as BoardMeta) ?? {};
+    // load() resets past/future, so undo cannot reach back past a board that
+    // was never edited here.
+    boardStore.getState().load(sBoard);
+    setMeta(sMeta);
+    // Clearing the state is not enough on its own — the autosave that follows
+    // rewrites the session record without ghostJson, so a reload cannot
+    // resurrect a comparison board belonging to the previous workspace.
+    setGhost(null);
+
+    const model = sMeta.model?.trim();
+    // The suffix is a display name for the recent list only; meta.model itself
+    // is untouched. Two shared boards with the same model collide and the newer
+    // replaces the older — the same de-duplication every other entry gets.
+    recordRecentBoard(
+      model ? `${model} (shared)` : 'Shared board',
+      writeBoardJson(sBoard, metadata),
+    );
+    setRecentBoards(getRecentBoards());
+
+    // A share link never carries a trace, so the recipient's own trace would
+    // otherwise sit under a stranger's outline. Hidden, not deleted.
+    trace.hideAll();
+
+    setPickedView('quad');
+    setCsIndex(nearestMidpointSection(sBoard));
+    // Drop any restored framing so the panes fit this board, not the last one.
+    pendingViews2d.current = {};
+    liveViewState.current = { ...liveViewState.current, views2d: {} };
+    delete liveViewState.current.camera3d;
+    setCameraEpoch((n) => n + 1);
+    setFitEpoch((n) => n + 1);
+    scheduleViewSave();
+
+    hydrated.current = true;
+    clearSharedPayload();
+    setPendingShare(null);
+    showToast('Shared board opened as an editable copy. Changes stay in this browser.');
+    // Count only — see docs/design/analytics.md.
+    track('shared_board_opened');
+  };
+  // The mount effect closes over the first render, and it is the one caller
+  // that cannot simply be re-created: route the call through a ref so it always
+  // runs the current closure.
+  const adoptRef = useRef(adoptSharedBoard);
+  adoptRef.current = adoptSharedBoard;
 
   const traceInput = useRef<HTMLInputElement>(null);
   // Which view a just-opened file picker targets (File menu / Sidebar share the input).
@@ -1165,6 +1282,7 @@ function AppShell() {
                 showStringer={view3d.showStringer}
                 showSections={view3d.showSections}
                 activeSectionX={activeSectionX}
+                key={cameraEpoch}
                 initialCamera={liveViewState.current.camera3d}
                 onCameraChange={onCameraChange}
               />
@@ -1399,6 +1517,7 @@ function AppShell() {
                   showStringer={view3d.showStringer}
                   showSections={view3d.showSections}
                   activeSectionX={activeSectionX}
+                  key={cameraEpoch}
                   initialCamera={liveViewState.current.camera3d}
                   onCameraChange={onCameraChange}
                 />
@@ -1493,6 +1612,19 @@ function AppShell() {
           settings={settings}
           onSave={handleSaveSettings}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {pendingShare && (
+        <SharedBoardPrompt
+          model={(pendingShare.metadata as BoardMeta | undefined)?.model}
+          onKeepCurrent={() => {
+            // The shared board never entered the store, so declining is a
+            // no-op beyond forgetting it.
+            clearSharedPayload();
+            setPendingShare(null);
+          }}
+          onOpenShared={() => adoptSharedBoard(pendingShare.board, pendingShare.metadata)}
         />
       )}
 

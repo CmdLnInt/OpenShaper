@@ -23,6 +23,12 @@ import {
   type StoredTrace,
   type TraceView,
 } from './trace-store';
+import {
+  DEFAULT_TRACE_VISIBILITY,
+  loadTraceVisibility,
+  saveTraceVisibility,
+  type TraceVisibility,
+} from './trace-visibility';
 
 export type { TraceView };
 
@@ -93,11 +99,40 @@ export interface UseTrace {
   onCalibrationClick: (pt: Vec2) => void;
   applyLength: (cm: number) => void;
   backgroundFor: (view: TraceView) => TraceBackground | undefined;
+  /** Whether each view's trace is drawn. The image is kept either way. */
+  visible: TraceVisibility;
+  setVisible: (view: TraceView, v: boolean) => void;
+  /** Hide both without deleting anything — what accepting a shared board does. */
+  hideAll: () => void;
 }
 
 export function useTrace(): UseTrace {
   const [traces, setTraces] = useState<Record<TraceView, TraceImage | null>>(emptyTraces);
   const [activeView, setActiveView] = useState<TraceView>('outline');
+  // Read once at boot (synchronous localStorage), then written through on change.
+  const [visible, setVisibleState] = useState<TraceVisibility>(() =>
+    typeof window === 'undefined' ? { ...DEFAULT_TRACE_VISIBILITY } : loadTraceVisibility(),
+  );
+
+  const writeVisible = useCallback((next: TraceVisibility) => {
+    setVisibleState(next);
+    saveTraceVisibility(next);
+  }, []);
+
+  const setVisible = useCallback(
+    (view: TraceView, v: boolean) =>
+      setVisibleState((prev) => {
+        const next = { ...prev, [view]: v };
+        saveTraceVisibility(next);
+        return next;
+      }),
+    [],
+  );
+
+  const hideAll = useCallback(
+    () => writeVisible({ outline: false, rocker: false }),
+    [writeVisible],
+  );
   const [calibration, setCalibration] = useState<Calibration>(null);
   const [lengthPts, setLengthPts] = useState<[Vec2, Vec2] | null>(null);
 
@@ -144,8 +179,11 @@ export function useTrace(): UseTrace {
       img.onerror = () => URL.revokeObjectURL(url);
       img.src = url;
       setActiveView(view);
+      // Nobody loads a trace in order not to see it — a replaced or newly
+      // loaded image always comes back visible, whatever the flag was.
+      setVisible(view, true);
     },
-    [writeTrace],
+    [writeTrace, setVisible],
   );
 
   const clear = useCallback(
@@ -246,10 +284,12 @@ export function useTrace(): UseTrace {
     [lengthPts, activeView, updateTransform],
   );
 
+  // Hiding happens here rather than in the panes: one place to get right, and
+  // the editors keep taking a background or nothing, as they always have.
   const backgroundFor = useCallback(
     (view: TraceView): TraceBackground | undefined => {
       const t = traces[view];
-      return t
+      return t && visible[view]
         ? {
             image: t.image,
             opacity: t.opacity,
@@ -259,7 +299,7 @@ export function useTrace(): UseTrace {
           }
         : undefined;
     },
-    [traces],
+    [traces, visible],
   );
 
   // Rehydrate persisted traces on mount.
@@ -342,6 +382,9 @@ export function useTrace(): UseTrace {
       onCalibrationClick,
       applyLength,
       backgroundFor,
+      visible,
+      setVisible,
+      hideAll,
     }),
     [
       traces,
@@ -359,6 +402,9 @@ export function useTrace(): UseTrace {
       onCalibrationClick,
       applyLength,
       backgroundFor,
+      visible,
+      setVisible,
+      hideAll,
     ],
   );
 }

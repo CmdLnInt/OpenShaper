@@ -509,6 +509,7 @@ Three rules govern every event:
 | `rail_bands_exported`   | `angle_mode`, `manual_by`, `bands`, `stations`, `paper`, `detail_pages`, `varied_along_board`, `cuts_inside`, `warnings` | …and this is a shaper who got through it                                   |
 | `spec_sheet_opened`     | —                                                                                                                        | Cheapest thing in the Export menu; the floor the others are read against   |
 | `share_link_copied`     | —                                                                                                                        | Whether share links are made at all; strictly count-only, see below        |
+| `shared_board_opened`   | —                                                                                                                        | The other half of the pair: whether a link ever reaches anyone             |
 | `trace_image_loaded`    | `target`                                                                                                                 | Distinctive feature, zero prior visibility                                 |
 | `consent_banner`        | `action` (`shown` \| `accepted` \| `rejected`)                                                                           | Distinguishes bad copy from a banner nobody sees                           |
 | `landscape_hint`        | `action` (`shown` \| `dismissed`)                                                                                        | Whether the cheapest phone win is one anybody takes                        |
@@ -517,8 +518,8 @@ Three rules govern every event:
 
 ### Share links carry nothing but the fact that one happened
 
-`share_link_copied` (`App.tsx`, from `ShareDialog.tsx`) has no properties, and
-the pair it will form with `shared_board_opened` will have none either. That is
+`share_link_copied` (`App.tsx`, from `ShareDialog.tsx`) and `shared_board_opened`
+(`App.tsx`, when a shared link is adopted) both have no properties at all. That is
 stricter than rule 1 above, deliberately.
 
 A share link is a URL fragment holding a gzipped board plus its full Board Info

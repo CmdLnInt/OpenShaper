@@ -12,7 +12,12 @@
  * that machine can open. A desktop user sharing to a forum needs the public web
  * address, which is what `SITE_URL` already is.
  */
-import { SHARE_URL_MAX_CHARS, SHARE_URL_WARN_CHARS } from '@openshaper/io';
+import {
+  ShareLinkError,
+  SHARE_URL_MAX_CHARS,
+  SHARE_URL_WARN_CHARS,
+  type ShareLinkErrorCode,
+} from '@openshaper/io';
 import { SITE_URL } from './seo/site';
 
 /**
@@ -75,3 +80,22 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
     return false;
   }
 };
+
+/**
+ * What to tell someone whose share link did not open.
+ *
+ * A fixed table, looked up by code. Never the raw parser message and never any
+ * part of the payload: a decode failure is a bad *input*, so its text must not
+ * carry board content into a toast, a screenshot or an error report.
+ */
+const SHARE_ERRORS: Record<ShareLinkErrorCode, string> = {
+  unsupported: 'This browser cannot open share links — it needs updating.',
+  'bad-envelope': "That link isn't an OpenShaper share link.",
+  'too-large': 'That share link is too large to open.',
+  'decompress-failed': 'That share link is damaged or incomplete.',
+  'too-large-decoded': 'That shared board is too large to open.',
+  'bad-board': 'That share link could not be read — it may be from a newer OpenShaper.',
+};
+
+export const shareLinkMessage = (e: unknown): string =>
+  e instanceof ShareLinkError ? SHARE_ERRORS[e.code] : 'That share link could not be opened.';
