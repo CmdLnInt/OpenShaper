@@ -1140,6 +1140,7 @@ function AppShell() {
                 material={view3d.material}
                 color={view3d.color}
                 finColor={settings.finColor}
+                viewCubeLineColor={settings.outlineColor}
                 analysis={view3d.analysis}
                 targetFaceSize={faceSizeFor(view3d.meshQuality)}
                 showStringer={view3d.showStringer}
@@ -1358,6 +1359,7 @@ function AppShell() {
                   material={view3d.material}
                   color={view3d.color}
                   finColor={settings.finColor}
+                  viewCubeLineColor={settings.outlineColor}
                   analysis={view3d.analysis}
                   targetFaceSize={faceSizeFor(view3d.meshQuality)}
                   showStringer={view3d.showStringer}
