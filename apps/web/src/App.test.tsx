@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { boardStore } from './store';
 import { STORAGE_KEY } from './recent-boards';
+import { openSection } from './test/sidebar';
 
 // The 3D pane lazy-loads three.js/fiber, which need WebGL — stub the whole package.
 vi.mock('@openshaper/render3d', () => ({ Board3DView: () => null }));
@@ -80,6 +81,9 @@ describe('<App /> smoke', () => {
 
     act(() => boardStore.getState().scaleBoard(1.1, 1, 1));
 
+    // History is a reference section: it starts collapsed, and a collapsed section's
+    // body is unmounted, so the steps are reached the way a user reaches them.
+    openSection('history');
     const step = await screen.findByRole('button', { name: /Resize board/ });
     fireEvent.click(step);
 

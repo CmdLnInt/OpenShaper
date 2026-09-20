@@ -18,3 +18,17 @@ export async function editorReady(page: Page): Promise<void> {
     return !!canvas && canvas.getBoundingClientRect().height > 0;
   });
 }
+
+/**
+ * Expand a sidebar section by its header name.
+ *
+ * The sidebar is an accordion and most sections start collapsed, with the body
+ * unmounted rather than hidden, so a test that wants a control inside one has to
+ * open it the same way a user does. Idempotent: an already-open section is left
+ * alone, so a spec can call this without knowing the current view's defaults.
+ */
+export async function openSection(page: Page, name: string): Promise<void> {
+  const header = page.getByRole('button', { name, exact: true });
+  await header.waitFor();
+  if ((await header.getAttribute('aria-expanded')) !== 'true') await header.click();
+}

@@ -38,7 +38,13 @@ export default function DocsOverview() {
           </Term>
           <Term name="The sidebar">
             Live specs, resize, board details, fins, weight estimate, trace images and the overlay
-            toggles. On narrow screens it becomes a bottom sheet.
+            toggles — each one a section you open and close by clicking its header, grouped under
+            Design, Build and Reference. A shut section still shows a summary on its header, so you
+            can read the whole list without opening anything. The double-chevron at the top shuts or
+            opens every section at once, and the chevron beside it folds the sidebar to a narrow
+            rail that keeps the headline dimensions while handing the space back to the canvas.
+            Changing view opens the sections that view is for; once you open or close a section
+            yourself it stays as you left it. On narrow screens the sidebar becomes a bottom sheet.
           </Term>
           <Term name="The menu bar">
             File, Export, Edit, View, Board and Help. On phones this collapses into a single button

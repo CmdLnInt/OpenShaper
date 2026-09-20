@@ -27,6 +27,7 @@ import { clearSharedPayload, extractSharedFragment } from './share-bootstrap';
 import { getRecentBoards } from './recent-boards';
 import { loadTraceVisibility } from './trace-visibility';
 import { boardStore } from './store';
+import { openSection } from './test/sidebar';
 import { saveViewState, DEFAULT_VIEW_STATE } from './view-state';
 
 vi.mock('@openshaper/render3d', () => ({ Board3DView: () => null }));
@@ -184,6 +185,7 @@ describe('what adoption resets', () => {
       foamType: 'EPS',
     });
 
+    openSection('boardInfo');
     await waitFor(() =>
       expect((screen.getAllByDisplayValue('Ada L')[0] as HTMLInputElement).value).toBe('Ada L'),
     );

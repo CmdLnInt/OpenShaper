@@ -26,6 +26,11 @@ export default function DocsSpecs() {
           These are computed in a background worker, so dragging a control point never stutters
           while the numbers catch up.
         </p>
+        <p>
+          Specs is the one section that starts open. Collapsed, its header still carries the volume;
+          folded to the rail, the sidebar still carries the headline dimensions — so the numbers you
+          check most are never more than a glance away, whatever else you have shut.
+        </p>
       </Section>
 
       <Section id="volume" title="Volume">
@@ -63,9 +68,9 @@ export default function DocsSpecs() {
         <Terms>
           <Term name="Grid & guides">Scale reference and station lines.</Term>
           <Term name="Curvature comb">
-            Quills drawn normal to a curve, scaled by curvature. A fair curve gives a smooth comb;
-            a kink shows as a spike or a sudden flip. This is the fastest way to find a flat spot
-            in a rail that looks fine to the eye.
+            Quills drawn normal to a curve, scaled by curvature. A fair curve gives a smooth comb; a
+            kink shows as a spike or a sudden flip. This is the fastest way to find a flat spot in a
+            rail that looks fine to the eye.
           </Term>
           <Term name="Volume distribution">
             How volume is spread along the length — where the board carries its float.
