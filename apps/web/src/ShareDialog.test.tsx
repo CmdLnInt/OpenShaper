@@ -105,6 +105,40 @@ describe('identification', () => {
     );
   });
 
+  it('keeps the fields mounted and focused while a name is typed', async () => {
+    // The regression this file exists for. `named` was derived live, so with a
+    // designer already set the FIRST character typed into the model made both
+    // fields non-empty, collapsed the form to the read-only line, and unmounted
+    // the input mid-word — only that character ever landed. On a phone the
+    // on-screen keyboard closed with it, which reads as the dialog closing.
+    render(<Harness initialMeta={{ designer: 'Jared' }} />);
+    await linkReady();
+
+    const field = () => screen.getByLabelText('Board model') as HTMLInputElement;
+    field().focus();
+
+    for (const value of ['j', 'ja', 'jar', 'jare', 'jared']) {
+      fireEvent.change(field(), { target: { value } });
+      // Still the same element, still focused — not a fresh node.
+      expect(screen.queryByLabelText('Board model')).not.toBeNull();
+      expect(document.activeElement).toBe(field());
+      expect(field().value).toBe(value);
+    }
+
+    await waitFor(() =>
+      expect(screen.getByTestId('meta').getAttribute('data-meta')).toContain('jared'),
+    );
+    // The read-only identification line must not take over mid-session.
+    expect(screen.queryByText('jared —')).toBeNull();
+  });
+
+  it('does not offer the fields when the board already has both', async () => {
+    render(<Harness initialMeta={{ model: 'Go Fish', designer: 'Ada L' }} />);
+    await linkReady();
+
+    expect(screen.queryByLabelText('Board model')).toBeNull();
+  });
+
   it('still allows copying with the fields left blank', async () => {
     const writeText = stubClipboard();
     const onCopied = vi.fn();

@@ -110,3 +110,34 @@ test('a damaged link leaves the editor usable and says why', async ({ page }) =>
   await expect(page.locator('canvas').first()).toBeVisible();
   expect(page.url()).not.toContain('board=');
 });
+
+/**
+ * Naming a board from a phone, which is where this broke in the wild.
+ *
+ * `named` was derived live, so with a designer already set the first character
+ * typed into the model made both fields non-empty and the form collapsed to the
+ * read-only line — unmounting the input. Only that character landed, and the
+ * on-screen keyboard closed with the field, which reads as the dialog closing.
+ * jsdom covers the unmount; this covers it with a real layout and a real focus.
+ */
+test.describe('naming a board on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test('the field survives a whole word when a designer already exists', async ({ page }) => {
+    await page.goto('/app');
+    await editorReady(page);
+
+    await page.getByRole('button', { name: 'Show board panels' }).click();
+    await page.getByLabel(/^designer$/i).fill('Jared');
+    await page.getByRole('button', { name: 'Hide board panels' }).click();
+
+    await page.getByRole('button', { name: 'Share board' }).click();
+    const field = page.getByLabel('Board model');
+    await field.click();
+    await page.keyboard.type('jared', { delay: 40 });
+
+    await expect(field).toHaveValue('jared');
+    await expect(field).toBeFocused();
+    await expect(page.getByRole('heading', { name: 'Share board' })).toBeVisible();
+  });
+});
