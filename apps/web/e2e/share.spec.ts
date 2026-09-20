@@ -112,32 +112,47 @@ test('a damaged link leaves the editor usable and says why', async ({ page }) =>
 });
 
 /**
- * Naming a board from a phone, which is where this broke in the wild.
+ * Naming a board while the dialog is open — the case reported from a phone.
  *
  * `named` was derived live, so with a designer already set the first character
  * typed into the model made both fields non-empty and the form collapsed to the
- * read-only line — unmounting the input. Only that character landed, and the
- * on-screen keyboard closed with the field, which reads as the dialog closing.
- * jsdom covers the unmount; this covers it with a real layout and a real focus.
+ * read-only line, unmounting the input. Only that character landed.
+ *
+ * Nothing about the cause is phone-specific — the dialog is one component at
+ * every width — but the *symptom* is much louder there, because the on-screen
+ * keyboard closes with the field and it reads as the dialog closing. A desktop
+ * user just watches the field disappear. So both tiers run the same assertions:
+ * the phone is where it was found, the desktop is where it would otherwise go
+ * unnoticed.
  */
-test.describe('naming a board on a phone', () => {
+const namingSurvivesTyping = async (page: Page, openPanels: boolean) => {
+  await page.goto('/app');
+  await editorReady(page);
+
+  // Set the designer first — that is what makes the next keystroke fatal.
+  if (openPanels) await page.getByRole('button', { name: 'Show board panels' }).click();
+  await page.getByLabel(/^designer$/i).fill('Jared');
+  if (openPanels) await page.getByRole('button', { name: 'Hide board panels' }).click();
+
+  await page.getByRole('button', { name: 'Share board' }).click();
+  const field = page.getByLabel('Board model');
+  await field.click();
+  await page.keyboard.type('jared', { delay: 40 });
+
+  await expect(field).toHaveValue('jared');
+  await expect(field).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Share board' })).toBeVisible();
+};
+
+test('naming a board survives typing on a desktop', async ({ page }) => {
+  // The sidebar is already visible at this width, so there is no sheet to open.
+  await namingSurvivesTyping(page, false);
+});
+
+test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('the field survives a whole word when a designer already exists', async ({ page }) => {
-    await page.goto('/app');
-    await editorReady(page);
-
-    await page.getByRole('button', { name: 'Show board panels' }).click();
-    await page.getByLabel(/^designer$/i).fill('Jared');
-    await page.getByRole('button', { name: 'Hide board panels' }).click();
-
-    await page.getByRole('button', { name: 'Share board' }).click();
-    const field = page.getByLabel('Board model');
-    await field.click();
-    await page.keyboard.type('jared', { delay: 40 });
-
-    await expect(field).toHaveValue('jared');
-    await expect(field).toBeFocused();
-    await expect(page.getByRole('heading', { name: 'Share board' })).toBeVisible();
+  test('naming a board survives typing', async ({ page }) => {
+    await namingSurvivesTyping(page, true);
   });
 });

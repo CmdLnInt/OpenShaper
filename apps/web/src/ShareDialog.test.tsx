@@ -14,6 +14,7 @@ import { parseBrd } from '@openshaper/io';
 import { SHARE_URL_MAX_CHARS } from '@openshaper/io';
 import type { BezierBoard } from '@openshaper/kernel';
 import { ShareDialog } from './ShareDialog';
+import { setTier, VIEWPORTS } from './test/viewport';
 import type { BoardMeta } from './file-io';
 import sampleBrd from './sample-board.brd?raw';
 
@@ -105,32 +106,45 @@ describe('identification', () => {
     );
   });
 
-  it('keeps the fields mounted and focused while a name is typed', async () => {
-    // The regression this file exists for. `named` was derived live, so with a
-    // designer already set the FIRST character typed into the model made both
-    // fields non-empty, collapsed the form to the read-only line, and unmounted
-    // the input mid-word — only that character ever landed. On a phone the
-    // on-screen keyboard closed with it, which reads as the dialog closing.
-    render(<Harness initialMeta={{ designer: 'Jared' }} />);
-    await linkReady();
+  /**
+   * The regression this file exists for, asserted on **every layout tier**.
+   *
+   * `named` was derived live, so with a designer already set the FIRST character
+   * typed into the model made both fields non-empty, collapsed the form to the
+   * read-only line, and unmounted the input mid-word — only that character ever
+   * landed. It was reported from a phone, where the on-screen keyboard closes
+   * with the field and it reads as the dialog closing, but nothing about the
+   * cause is phone-specific: the dialog is one component at every width, and a
+   * desktop user loses the field and the focus in exactly the same way.
+   *
+   * Tiers are named explicitly because the jsdom default is *tablet*, so a test
+   * that says nothing is not covering desktop.
+   */
+  it.each(Object.keys(VIEWPORTS) as (keyof typeof VIEWPORTS)[])(
+    'keeps the fields mounted and focused while a name is typed (%s)',
+    async (tier) => {
+      setTier(tier);
+      render(<Harness initialMeta={{ designer: 'Jared' }} />);
+      await linkReady();
 
-    const field = () => screen.getByLabelText('Board model') as HTMLInputElement;
-    field().focus();
+      const field = () => screen.getByLabelText('Board model') as HTMLInputElement;
+      field().focus();
 
-    for (const value of ['j', 'ja', 'jar', 'jare', 'jared']) {
-      fireEvent.change(field(), { target: { value } });
-      // Still the same element, still focused — not a fresh node.
-      expect(screen.queryByLabelText('Board model')).not.toBeNull();
-      expect(document.activeElement).toBe(field());
-      expect(field().value).toBe(value);
-    }
+      for (const value of ['j', 'ja', 'jar', 'jare', 'jared']) {
+        fireEvent.change(field(), { target: { value } });
+        // Still the same element, still focused — not a fresh node.
+        expect(screen.queryByLabelText('Board model')).not.toBeNull();
+        expect(document.activeElement).toBe(field());
+        expect(field().value).toBe(value);
+      }
 
-    await waitFor(() =>
-      expect(screen.getByTestId('meta').getAttribute('data-meta')).toContain('jared'),
-    );
-    // The read-only identification line must not take over mid-session.
-    expect(screen.queryByText('jared —')).toBeNull();
-  });
+      await waitFor(() =>
+        expect(screen.getByTestId('meta').getAttribute('data-meta')).toContain('jared'),
+      );
+      // The read-only identification line must not take over mid-session.
+      expect(screen.queryByText('jared —')).toBeNull();
+    },
+  );
 
   it('does not offer the fields when the board already has both', async () => {
     render(<Harness initialMeta={{ model: 'Go Fish', designer: 'Ada L' }} />);
