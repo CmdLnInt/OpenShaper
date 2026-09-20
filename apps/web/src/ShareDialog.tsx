@@ -118,7 +118,22 @@ export function ShareDialog({
   const size = state.kind === 'ready' ? shareSize(state.url) : 'ok';
   const model = meta.model?.trim() ?? '';
   const designer = meta.designer?.trim() ?? '';
-  const named = model !== '' && designer !== '';
+  /**
+   * Whether to offer the naming fields — decided **once, when the dialog
+   * opens**, and deliberately not recomputed as the user types.
+   *
+   * Deriving it live meant the first character typed into an empty field made
+   * both fields non-empty, which flipped this to false and replaced the whole
+   * form with the read-only identification line — unmounting the input the user
+   * was in. Focus fell to the body, so only that first character ever landed,
+   * and on a phone the on-screen keyboard collapsed with it, which reads as the
+   * share dialog closing.
+   */
+  const [askForName] = useState(() => {
+    const m = meta.model?.trim() ?? '';
+    const d = meta.designer?.trim() ?? '';
+    return m === '' || d === '';
+  });
 
   const copy = async () => {
     if (state.kind !== 'ready') return;
@@ -152,7 +167,7 @@ export function ShareDialog({
         </PanelHeader>
 
         <PanelBody className="space-y-4 text-sm">
-          {named ? (
+          {!askForName ? (
             <p className="font-medium">
               {model} <span className="text-muted-foreground">— {designer}</span>
             </p>
