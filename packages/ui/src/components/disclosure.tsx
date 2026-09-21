@@ -23,6 +23,14 @@ export interface DisclosureProps {
    * see.
    */
   marked?: boolean;
+  /**
+   * Heading level for the header, 2 by default.
+   *
+   * A disclosure nested inside another (the spec readout's bands inside its section)
+   * has to be an `h3`, or the document outline flattens and every band reads as a
+   * sibling of the tool that contains it.
+   */
+  headingLevel?: 2 | 3;
   children: ReactNode;
   className?: string;
 }
@@ -47,12 +55,14 @@ export function Disclosure({
   onOpenChange,
   summary,
   marked = false,
+  headingLevel = 2,
   children,
   className,
 }: DisclosureProps) {
   const bodyId = useId();
   const summaryId = `${bodyId}-summary`;
   const showSummary = summary != null && !open;
+  const Heading = headingLevel === 3 ? 'h3' : 'h2';
   return (
     <div
       className={cn(
@@ -60,7 +70,7 @@ export function Disclosure({
         className,
       )}
     >
-      <h2>
+      <Heading>
         <button
           type="button"
           aria-expanded={open}
@@ -105,7 +115,7 @@ export function Disclosure({
             </span>
           )}
         </button>
-      </h2>
+      </Heading>
       {open && (
         <div id={bodyId} className="border-t border-border px-3 py-2">
           {children}

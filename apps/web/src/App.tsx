@@ -1317,7 +1317,6 @@ function AppShell() {
       collapsible={collapsible}
       specs={specs}
       units={units}
-      interpolationType={board?.interpolationType ?? 'controlPoint'}
       resize={resize}
       setResize={setResize}
       applyResize={applyResize}

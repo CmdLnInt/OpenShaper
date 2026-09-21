@@ -13,7 +13,7 @@
  * presentational so the shell stays the single source of truth (several of these values
  * also drive the editor overlays).
  */
-import { FIN_SETUP_LABELS, type InterpolationType } from '@openshaper/kernel';
+import { FIN_SETUP_LABELS } from '@openshaper/kernel';
 import type { BoardSpecs } from '@openshaper/store';
 import {
   Button,
@@ -26,7 +26,20 @@ import {
   Textarea,
   Tooltip,
 } from '@openshaper/ui';
-import { Check, ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy } from 'lucide-react';
+import {
+  Check,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Copy,
+  History as HistoryIcon,
+  Layers,
+  Pin,
+  PinOff,
+  Ruler,
+  Spline,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   useEffect,
   useState,
@@ -44,12 +57,20 @@ import type { TraceView, UseTrace } from './use-trace';
 import { FinPanel } from './FinPanel';
 import {
   anyOpen,
-  SECTION_GROUPS,
+  sectionsInTab,
+  selectTab,
   setAll,
-  SIDEBAR_SECTIONS,
+  setAllSpecGroups,
+  shownTabs,
+  SIDEBAR_TABS,
+  tabById,
   toggleSection,
+  togglePin,
+  toggleSpecGroup,
   type SectionId,
   type SidebarState,
+  type SpecGroupId,
+  type TabId,
 } from './sidebar-sections';
 import { boardStore } from './store';
 import { OverlayToggle, Sel, SpecRow, UnitSelect } from './view-toolkit';
@@ -74,17 +95,18 @@ function diffVol(cur: number, ghost: number): string {
   return `${d >= 0 ? '+' : '−'}${fmtVol(Math.abs(d))}`;
 }
 
-/** A labeled subsection of the spec readout (Nose / Center / Tail / Overall). */
-function SpecGroup({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <div className="pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
+/**
+ * Strip icons, by tab.
+ *
+ * Here rather than in the registry so `sidebar-sections.ts` stays free of React and its
+ * reducers stay testable without mounting anything.
+ */
+const TAB_ICONS: Record<TabId, LucideIcon> = {
+  specs: Ruler,
+  shape: Spline,
+  build: Layers,
+  reference: HistoryIcon,
+};
 
 export interface ResizeFields {
   l: string;
@@ -102,7 +124,6 @@ export interface OverlayToggles {
 export interface SidebarProps {
   specs: BoardSpecs | null;
   units: LengthUnit;
-  interpolationType: InterpolationType;
 
   resize: ResizeFields;
   setResize: Dispatch<SetStateAction<ResizeFields>>;
@@ -144,7 +165,6 @@ export interface SidebarProps {
 export function Sidebar({
   specs,
   units,
-  interpolationType,
   resize,
   setResize,
   applyResize,
@@ -170,26 +190,21 @@ export function Sidebar({
     () => boardStore.getState().board?.fins ?? null,
   );
 
-  if (collapsible && sidebar.collapsed) {
-    return (
-      <SidebarRail
-        specs={specs}
-        units={units}
-        onExpand={() => onSidebarChange({ ...sidebar, collapsed: false })}
-      />
-    );
-  }
-
-  const open = new Set(sidebar.open);
-  const isOpen = (id: SectionId) => open.has(id);
-  const setOpen = (id: SectionId) => (v: boolean) => onSidebarChange(toggleSection(sidebar, id, v));
-
   const overlaysOn = Object.values(overlayToggles).filter(Boolean).length;
   const hasTrace = Boolean(trace.traces.outline || trace.traces.rocker);
 
   /** Section bodies, keyed by id. A section absent here is not rendered at all. */
   const bodies: Partial<Record<SectionId, ReactNode>> = {
-    specs: <SpecsSection specs={specs} units={units} interpolationType={interpolationType} />,
+    // Rendered by the Specs tab itself, which owns the readout's collapsible bands.
+    // Present here so the section still counts as visible for that tab.
+    specs: (
+      <SpecsSection
+        specs={specs}
+        units={units}
+        sidebar={sidebar}
+        onSidebarChange={onSidebarChange}
+      />
+    ),
     resize: (
       <ResizeSection
         specs={specs}
@@ -232,34 +247,290 @@ export function Sidebar({
     history: `${past.length} step${past.length === 1 ? '' : 's'}`,
   };
 
-  const visible = SIDEBAR_SECTIONS.filter((s) => bodies[s.id] !== undefined);
+  const tabs = shownTabs(sidebar);
 
   return (
-    <aside aria-label="Board panels" className="flex w-full min-h-0 shrink-0 flex-col lg:w-72">
-      {/* Deliberately not `sticky`: a bar floating over the list owns a 36px band at
-          the top of it where a section header can come to rest underneath, and the
-          click that should open that section hits the bar instead. On the desktop
-          mount the row is a flex sibling of the scroller below, so it stays put
-          without ever covering anything; inside the sheet the sheet body does the
-          scrolling and this simply scrolls with it. */}
-      <div className="flex h-9 shrink-0 items-center gap-1 pointer-coarse:h-12">
-        <IconButton
-          label={anyOpen(sidebar) ? 'Collapse all sections' : 'Expand all sections'}
-          onClick={() => onSidebarChange(setAll(sidebar, !anyOpen(sidebar)))}
-        >
-          {anyOpen(sidebar) ? (
-            <ChevronsDownUp className="size-4" />
-          ) : (
-            <ChevronsUpDown className="size-4" />
+    <aside
+      aria-label="Board panels"
+      className={cn(
+        'flex min-h-0 shrink-0 gap-2',
+        // Desktop: strip beside the panel, fixed overall width. In the sheet the strip
+        // is a row above the panel, so the whole thing is one column at full width.
+        collapsible ? 'flex-row' : 'w-full flex-col',
+      )}
+    >
+      <TabStrip
+        sidebar={sidebar}
+        onSidebarChange={onSidebarChange}
+        specs={specs}
+        units={units}
+        vertical={collapsible}
+        hasTrace={hasTrace}
+      />
+
+      {!(collapsible && sidebar.collapsed) && (
+        <div className={cn('flex min-h-0 flex-col gap-2', collapsible ? 'w-64 flex-1' : 'w-full')}>
+          {/* First, deliberately: the sheet opens at `half` and everything past the
+              first panel is already below the fold there, so a control banished from
+              the toolbar must not land somewhere worse than where it came from. */}
+          {onUnitChange && (
+            <Panel>
+              <PanelBody className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Display units</span>
+                <UnitSelect value={units.key} onChange={onUnitChange} />
+              </PanelBody>
+            </Panel>
           )}
+
+          {tabs.map((id, i) => {
+            const isPinnedSlot = tabs.length === 2 && i === 0;
+            return (
+              <TabPanel
+                key={id}
+                tab={id}
+                sidebar={sidebar}
+                onSidebarChange={onSidebarChange}
+                bodies={bodies}
+                summaries={summaries}
+                hasTrace={hasTrace}
+                specs={specs}
+                units={units}
+                /* The pinned panel is a reference held on screen, so it yields height
+                   to the one being worked in rather than splitting evenly. */
+                className={cn(
+                  isPinnedSlot ? 'max-h-[45%] shrink-0' : 'min-h-0 flex-1',
+                  collapsible && 'overflow-hidden',
+                )}
+                /* A pinned panel taller than its slot was cutting a spec row in half,
+                   which reads as broken rather than as "there is more below". Fading the
+                   last few pixels says it continues; over content that already fits, it
+                   falls on empty space and shows nothing. */
+                fade={isPinnedSlot}
+                collapsible={collapsible}
+                showFold={collapsible && !isPinnedSlot}
+              />
+            );
+          })}
+
+          {!collapsible && <SupportFooter />}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+/**
+ * The permanent tab strip: four tools groups that no open panel can displace.
+ *
+ * This is the edge tab strip (JetBrains tool window bars, Blender's sidebar tabs). The
+ * captions are upright rather than rotated on purpose: rotated labels are what Blender
+ * ships and what its own users keep asking it to stop shipping, and the point here was
+ * tabs you can read at a glance. Upright costs ~32px of width and buys that back.
+ *
+ * Vertical on the desktop, a horizontal row in the bottom sheet — where a 64px column of
+ * tabs would eat a fifth of the sheet's height, which is the axis that is actually scarce
+ * there.
+ */
+function TabStrip({
+  sidebar,
+  onSidebarChange,
+  specs,
+  units,
+  vertical,
+  hasTrace,
+}: {
+  sidebar: SidebarState;
+  onSidebarChange: (next: SidebarState) => void;
+  specs: BoardSpecs | null;
+  units: LengthUnit;
+  vertical: boolean;
+  hasTrace: boolean;
+}) {
+  const shown = new Set(shownTabs(sidebar));
+  return (
+    <div
+      className={cn(
+        'flex shrink-0 gap-0.5',
+        vertical
+          ? 'w-16 flex-col rounded-lg border border-border bg-card py-1'
+          : 'no-scrollbar w-full flex-row items-stretch overflow-x-auto',
+      )}
+    >
+      <div
+        role="tablist"
+        aria-label="Sidebar tools"
+        aria-orientation={vertical ? 'vertical' : 'horizontal'}
+        className={cn('flex gap-0.5', vertical ? 'flex-col px-1' : 'flex-row')}
+      >
+        {SIDEBAR_TABS.map((tab) => {
+          const Icon = TAB_ICONS[tab.id];
+          const active = sidebar.activeTab === tab.id && !sidebar.collapsed;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              aria-label={tab.title}
+              title={tab.title}
+              onClick={() => onSidebarChange(selectTab(sidebar, tab.id))}
+              className={cn(
+                'relative flex items-center gap-1 rounded-md transition-colors',
+                vertical
+                  ? 'min-h-14 flex-col justify-center px-1 py-1.5 pointer-coarse:min-h-16'
+                  : 'min-h-9 shrink-0 flex-row px-2.5 py-1 pointer-coarse:min-h-11',
+                active
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
+              )}
+            >
+              <Icon aria-hidden className="size-4 shrink-0" />
+              <span
+                className={cn(
+                  'font-semibold uppercase tracking-wide',
+                  vertical ? 'text-[9px] leading-none' : 'text-[11px]',
+                )}
+              >
+                {tab.label}
+              </span>
+              {/* A pinned tab that is not the active one is still on screen; without
+                  this the strip claims otherwise. */}
+              {shown.has(tab.id) && !active && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    'absolute size-1.5 rounded-full bg-primary',
+                    vertical ? 'right-1 top-1' : 'right-1 top-1',
+                  )}
+                />
+              )}
+              {/* Trace holds state you cannot otherwise see from a shut tab. */}
+              {tab.id === 'reference' && hasTrace && !shown.has(tab.id) && (
+                <span
+                  aria-hidden
+                  className="absolute right-1 top-1 size-1.5 rounded-full bg-muted-foreground"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {vertical && (
+        <>
+          {/* The readout lives in the strip, so it is never the thing that goes away.
+              Folded, it is all that is left, which is what issue #37 asked not to lose.
+              Expanded, it is what makes exclusive tabs lossless: resizing happens in
+              Shape and the result is a Specs number, and without this you would edit in
+              one tab and have to change tabs to see what you did.
+
+              Rotated, unlike the tab captions: 64px cannot hold "1879.6 mm" upright (it
+              truncated to "1879.6 m…") while the strip has hundreds of pixels of unused
+              height below the tabs. Captions are what you scan and stay upright; this is
+              a number you glance at, and here the width is the binding constraint. */}
+          <div className="flex min-h-0 flex-1 justify-center overflow-hidden py-2">
+            {specs && (
+              <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground [writing-mode:vertical-rl]">
+                {fmtDimsHeadline(specs.length, specs.maxWidth, specs.thickness, units)}
+                <span className="text-primary"> · {fmtVol(specs.volume)}</span>
+              </span>
+            )}
+          </div>
+          <div className="flex justify-center">
+            <SupportRailLink />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One tab's panel: its sections as an accordion, under a header carrying the pin, the
+ * master collapse and (for the working panel) the fold.
+ */
+function TabPanel({
+  tab,
+  sidebar,
+  onSidebarChange,
+  bodies,
+  summaries,
+  hasTrace,
+  specs,
+  units,
+  className,
+  collapsible,
+  showFold,
+  fade = false,
+}: {
+  tab: TabId;
+  sidebar: SidebarState;
+  onSidebarChange: (next: SidebarState) => void;
+  bodies: Partial<Record<SectionId, ReactNode>>;
+  summaries: Partial<Record<SectionId, ReactNode>>;
+  hasTrace: boolean;
+  specs: BoardSpecs | null;
+  units: LengthUnit;
+  className?: string;
+  collapsible: boolean;
+  showFold: boolean;
+  fade?: boolean;
+}) {
+  const meta = tabById(tab);
+  const sections = sectionsInTab(tab).filter((s) => bodies[s.id] !== undefined);
+  const ids = sections.map((s) => s.id);
+  const open = new Set(sidebar.open);
+  const pinned = sidebar.pinnedTab === tab;
+
+  // A tab that holds exactly one tool renders it bare: wrapping a lone section in its
+  // own header, inside a panel that already names the tab, is a click that reveals
+  // nothing — and on the Specs tab it would be an accordion nested in an accordion.
+  //
+  // Keyed on the registry, not on how many happen to be visible right now. Reference
+  // holds three tools of which two are gated (an empty undo stack, no ghost board), and
+  // a tab that renders headerless until you make an edit and then grows headers is a
+  // panel that changes shape as you use it.
+  const bare = sectionsInTab(tab).length === 1;
+
+  // On the Specs tab the master toggle governs the readout's four bands; everywhere else
+  // it governs that tab's sections. Either way it acts on what is actually on screen.
+  const isSpecs = tab === 'specs';
+  const expanded = isSpecs ? sidebar.specGroups.length > 0 : anyOpen(sidebar, ids);
+  const toggleAll = () =>
+    onSidebarChange(
+      isSpecs ? setAllSpecGroups(sidebar, !expanded) : setAll(sidebar, !expanded, ids),
+    );
+
+  return (
+    <section aria-label={meta.title} className={cn('flex flex-col', className)}>
+      <div className="flex h-8 shrink-0 items-center gap-1 pointer-coarse:h-11">
+        <h2 className="min-w-0 flex-1 truncate px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+          {meta.title}
+        </h2>
+        <IconButton
+          label={pinned ? `Unpin ${meta.title}` : `Pin ${meta.title} open`}
+          onClick={() => onSidebarChange(togglePin(sidebar, tab))}
+        >
+          {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
         </IconButton>
-        <span className="flex-1" />
-        {collapsible && (
+        {sections.length > 1 || isSpecs ? (
+          <IconButton
+            label={expanded ? 'Collapse all sections' : 'Expand all sections'}
+            onClick={toggleAll}
+          >
+            {expanded ? (
+              <ChevronsDownUp className="size-3.5" />
+            ) : (
+              <ChevronsUpDown className="size-3.5" />
+            )}
+          </IconButton>
+        ) : null}
+        {showFold && (
           <IconButton
             label="Hide board panels"
             onClick={() => onSidebarChange({ ...sidebar, collapsed: true })}
           >
-            <ChevronRight className="size-4" />
+            <ChevronRight className="size-3.5" />
           </IconButton>
         )}
       </div>
@@ -267,50 +538,41 @@ export function Sidebar({
       <div
         className={cn(
           'flex min-h-0 flex-col gap-2 pb-2',
-          // Only the desktop mount is its own scroll container. Inside the sheet the
-          // sheet body scrolls, and a bounded scroller here would fight it.
+          // Only the desktop mount scrolls here; in the sheet the sheet body scrolls
+          // and a bounded scroller would fight it.
           collapsible && 'flex-1 overflow-y-auto pr-0.5',
+          fade && '[mask-image:linear-gradient(to_bottom,black_calc(100%-14px),transparent)]',
         )}
       >
-        {/* First, deliberately: the sheet opens at `half` and everything past Specs
-            is already below the fold there, so a control banished from the toolbar
-            must not land somewhere worse than where it came from. */}
-        {onUnitChange && (
-          <Panel>
-            <PanelBody className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-              <span className="text-muted-foreground">Display units</span>
-              <UnitSelect value={units.key} onChange={onUnitChange} />
-            </PanelBody>
-          </Panel>
-        )}
-
-        {SECTION_GROUPS.map((group) => {
-          const inGroup = visible.filter((s) => s.group === group);
-          if (inGroup.length === 0) return null;
-          return (
-            <div key={group} className="flex flex-col gap-2">
-              <div className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
-                {group}
+        {bare
+          ? sections.map((s) => (
+              <div key={s.id}>
+                {isSpecs ? (
+                  <SpecsSection
+                    specs={specs}
+                    units={units}
+                    sidebar={sidebar}
+                    onSidebarChange={onSidebarChange}
+                  />
+                ) : (
+                  bodies[s.id]
+                )}
               </div>
-              {inGroup.map((s) => (
-                <Disclosure
-                  key={s.id}
-                  title={s.title}
-                  open={isOpen(s.id)}
-                  onOpenChange={setOpen(s.id)}
-                  summary={summaries[s.id]}
-                  marked={s.id === 'trace' && hasTrace}
-                >
-                  {bodies[s.id]}
-                </Disclosure>
-              ))}
-            </div>
-          );
-        })}
+            ))
+          : sections.map((s) => (
+              <Disclosure
+                key={s.id}
+                title={s.title}
+                open={open.has(s.id)}
+                onOpenChange={(v) => onSidebarChange(toggleSection(sidebar, s.id, v))}
+                summary={summaries[s.id]}
+                marked={s.id === 'trace' && hasTrace}
+              >
+                {bodies[s.id]}
+              </Disclosure>
+            ))}
       </div>
-
-      <SupportFooter />
-    </aside>
+    </section>
   );
 }
 
@@ -335,49 +597,6 @@ function IconButton({
         {children}
       </button>
     </Tooltip>
-  );
-}
-
-/**
- * The folded sidebar: 40px of rail that hands 248px back to the canvas while keeping
- * the readout issue #37 did not want to lose.
- *
- * The dims run vertically because they are the one thing worth keeping at this width;
- * a rail of icons would have given the space back and taken the answer to "how big is
- * this board" with it.
- */
-function SidebarRail({
-  specs,
-  units,
-  onExpand,
-}: {
-  specs: BoardSpecs | null;
-  units: LengthUnit;
-  onExpand: () => void;
-}) {
-  return (
-    <div className="flex w-10 shrink-0 flex-col items-center gap-1 rounded-lg border border-border bg-card py-1.5">
-      <IconButton label="Show board panels" onClick={onExpand}>
-        <ChevronRight className="size-4 rotate-180" />
-      </IconButton>
-      {/* The whole rail reads as one target; this is the rest of it, hidden from
-          assistive tech so the chevron above stays the single announced control. */}
-      <button
-        type="button"
-        aria-hidden
-        tabIndex={-1}
-        onClick={onExpand}
-        className="flex min-h-0 flex-1 cursor-pointer justify-center overflow-hidden rounded-md py-1 transition-colors hover:bg-accent/40"
-      >
-        {specs && (
-          <span className="[writing-mode:vertical-rl] whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground">
-            {fmtDimsHeadline(specs.length, specs.maxWidth, specs.thickness, units)} ·{' '}
-            {fmtVol(specs.volume)}
-          </span>
-        )}
-      </button>
-      <SupportRailLink />
-    </div>
   );
 }
 
@@ -421,15 +640,57 @@ function SupportRailLink() {
   );
 }
 
+/**
+ * A band of the readout, collapsible.
+ *
+ * All four open is nineteen rows — roughly 600px, which filled the whole sidebar on a
+ * laptop and is what sent every other tool off-screen. Shut, each header still carries
+ * the one number that band is usually consulted for, so collapsing costs information
+ * you wanted rather than information you had.
+ */
+function SpecBand({
+  id,
+  title,
+  summary,
+  sidebar,
+  onSidebarChange,
+  children,
+}: {
+  id: SpecGroupId;
+  title: string;
+  summary: ReactNode;
+  sidebar: SidebarState;
+  onSidebarChange: (next: SidebarState) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Disclosure
+      headingLevel={3}
+      title={title}
+      summary={summary}
+      open={sidebar.specGroups.includes(id)}
+      onOpenChange={(v) => onSidebarChange(toggleSpecGroup(sidebar, id, v))}
+    >
+      <div className="space-y-1">{children}</div>
+    </Disclosure>
+  );
+}
+
 function SpecsSection({
   specs,
   units,
-  interpolationType,
+  sidebar,
+  onSidebarChange,
 }: {
   specs: BoardSpecs | null;
   units: LengthUnit;
-  interpolationType: InterpolationType;
+  sidebar: SidebarState;
+  onSidebarChange: (next: SidebarState) => void;
 }) {
+  const interpolationType = useSyncExternalStore(
+    boardStore.subscribe,
+    () => boardStore.getState().board?.interpolationType ?? 'controlPoint',
+  );
   // Brief confirmation after copying the dimensions headline; resets itself.
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -441,7 +702,7 @@ function SpecsSection({
   if (!specs) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (
-    <div className="space-y-1 text-sm">
+    <div className="space-y-2 text-sm">
       <Tooltip label={copied ? 'Copied' : 'Copy dimensions'}>
         <button
           type="button"
@@ -469,7 +730,13 @@ function SpecsSection({
         </button>
       </Tooltip>
 
-      <SpecGroup title="Nose">
+      <SpecBand
+        id="nose"
+        title="Nose"
+        summary={`rocker ${fmtLen(specs.noseRocker, units)}`}
+        sidebar={sidebar}
+        onSidebarChange={onSidebarChange}
+      >
         <SpecRow label={'Width @ 12"'} value={fmtLen(specs.noseWidth, units)} />
         <SpecRow label={'Thickness @ 12"'} value={fmtLen(specs.noseThickness, units)} />
         <SpecRow label="Rocker" value={fmtLen(specs.noseRocker, units)} />
@@ -477,17 +744,29 @@ function SpecsSection({
         {specs.length >= 121.92 && (
           <SpecRow label={'Rocker @ 24"'} value={fmtLen(specs.noseRocker2, units)} />
         )}
-      </SpecGroup>
+      </SpecBand>
 
-      <SpecGroup title="Center">
+      <SpecBand
+        id="center"
+        title="Center"
+        summary={fmtLen(specs.maxWidth, units)}
+        sidebar={sidebar}
+        onSidebarChange={onSidebarChange}
+      >
         <SpecRow label="Width" value={fmtLen(specs.maxWidth, units)} />
         <SpecRow label="Wide point" value={fmtLen(specs.maxWidthPos, units)} />
         <SpecRow label="Center width" value={fmtLen(specs.centerWidth, units)} />
         <SpecRow label="Thickness" value={fmtLen(specs.thickness, units)} />
         <SpecRow label="Max thickness" value={fmtLen(specs.maxThickness, units)} />
-      </SpecGroup>
+      </SpecBand>
 
-      <SpecGroup title="Tail">
+      <SpecBand
+        id="tail"
+        title="Tail"
+        summary={`rocker ${fmtLen(specs.tailRocker, units)}`}
+        sidebar={sidebar}
+        onSidebarChange={onSidebarChange}
+      >
         <SpecRow label={'Width @ 12"'} value={fmtLen(specs.tailWidth, units)} />
         <SpecRow label={'Thickness @ 12"'} value={fmtLen(specs.tailThickness, units)} />
         <SpecRow label="Rocker" value={fmtLen(specs.tailRocker, units)} />
@@ -495,15 +774,21 @@ function SpecsSection({
         {specs.length >= 121.92 && (
           <SpecRow label={'Rocker @ 24"'} value={fmtLen(specs.tailRocker2, units)} />
         )}
-      </SpecGroup>
+      </SpecBand>
 
-      <SpecGroup title="Overall">
+      <SpecBand
+        id="overall"
+        title="Overall"
+        summary={fmtVol(specs.volume)}
+        sidebar={sidebar}
+        onSidebarChange={onSidebarChange}
+      >
         <SpecRow label="Length" value={fmtLen(specs.length, units)} />
         <SpecRow label="Length o/curve" value={fmtLen(specs.lengthOverCurve, units)} />
         <SpecRow label="Max rocker" value={fmtLen(specs.maxRocker, units)} />
         <SpecRow label="Volume" value={fmtVol(specs.volume)} />
         <SpecRow label="Center of mass" value={fmtLen(specs.centerOfMass, units)} />
-      </SpecGroup>
+      </SpecBand>
 
       <div className="flex items-center justify-between gap-2 pt-1">
         <span className="text-muted-foreground">Interpolation</span>

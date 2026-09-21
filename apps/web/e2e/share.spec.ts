@@ -42,6 +42,10 @@ test('a modified board round-trips through a link into a clean browser', async (
   await openSection(page, 'Resize');
   await page.getByLabel('Length').first().fill('2100');
   await page.getByRole('button', { name: 'Apply' }).click();
+  // Resize lives in the Shape tab and the headline in Specs, so checking the result is
+  // a tab away — the strip's own readout is what keeps the number visible in between.
+  await expect(page.getByRole('complementary', { name: 'Board panels' })).toContainText('2100');
+  await page.getByRole('tab', { name: 'Specs' }).click();
   await expect(headlineBox(page)).toContainText('2100');
 
   // Name it — the dialog offers the fields when the board has none.

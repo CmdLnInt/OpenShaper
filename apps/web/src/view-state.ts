@@ -12,7 +12,10 @@
 import {
   DEFAULT_SIDEBAR_STATE,
   isSectionId,
+  isSpecGroupId,
+  isTabId,
   sectionIds,
+  specGroupIds,
   type SidebarState,
 } from './sidebar-sections';
 import type { EditorKind, View } from './view-toolkit';
@@ -143,10 +146,21 @@ const sanitizeSidebar = (v: unknown): SidebarState | undefined => {
   const touched = ids(o.touched);
   // A blob with neither list is not a sidebar, whatever else it holds.
   if (!open && !touched) return undefined;
+  const bands = Array.isArray(o.specGroups)
+    ? (() => {
+        const kept = new Set(o.specGroups.filter(isSpecGroupId));
+        return specGroupIds().filter((id) => kept.has(id));
+      })()
+    : undefined;
   return {
     collapsed: bool(o.collapsed, DEFAULT_SIDEBAR_STATE.collapsed),
+    // A tab that no longer exists must not be selectable: it would render an empty
+    // panel beside a strip with nothing lit.
+    activeTab: isTabId(o.activeTab) ? o.activeTab : DEFAULT_SIDEBAR_STATE.activeTab,
+    pinnedTab: isTabId(o.pinnedTab) ? o.pinnedTab : null,
     open: open ?? DEFAULT_SIDEBAR_STATE.open,
     touched: touched ?? DEFAULT_SIDEBAR_STATE.touched,
+    specGroups: bands ?? DEFAULT_SIDEBAR_STATE.specGroups,
   };
 };
 

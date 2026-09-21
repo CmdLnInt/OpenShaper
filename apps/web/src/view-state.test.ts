@@ -26,7 +26,14 @@ const sample: ViewState = {
     rocker: { cx: 80, cy: 3.1, scale: 6 },
   },
   camera3d: { position: [0, -250, 110], target: [0, 10, 0] },
-  sidebar: { collapsed: true, open: ['specs', 'trace'], touched: ['trace'] },
+  sidebar: {
+    collapsed: true,
+    activeTab: 'build',
+    pinnedTab: 'specs',
+    open: ['specs', 'trace'],
+    touched: ['trace'],
+    specGroups: ['nose', 'overall'],
+  },
 };
 
 describe('view-state', () => {
@@ -198,10 +205,43 @@ describe('sidebar persistence', () => {
     expect(loadViewState().sidebar).toEqual(DEFAULT_SIDEBAR_STATE);
   });
 
+  it('round-trips the active and pinned tabs', () => {
+    saveViewState(sample);
+    const s = loadViewState().sidebar!;
+    expect(s.activeTab).toBe('build');
+    expect(s.pinnedTab).toBe('specs');
+  });
+
+  it('falls back to Specs when the stored tab no longer exists', () => {
+    // A removed tab must not stay selectable: it would render an empty panel beside a
+    // strip with nothing lit.
+    saveViewState(sample);
+    const raw = JSON.parse(localStorage.getItem('bs.viewState')!);
+    raw.sidebar.activeTab = 'construction';
+    raw.sidebar.pinnedTab = 'construction';
+    localStorage.setItem('bs.viewState', JSON.stringify(raw));
+    const s = loadViewState().sidebar!;
+    expect(s.activeTab).toBe(DEFAULT_SIDEBAR_STATE.activeTab);
+    expect(s.pinnedTab).toBeNull();
+    expect(s.open).toEqual(['specs', 'trace']); // the good fields still survive
+  });
+
+  it('round-trips the spec bands and drops ids it does not know', () => {
+    saveViewState(sample);
+    const raw = JSON.parse(localStorage.getItem('bs.viewState')!);
+    raw.sidebar.specGroups = ['overall', 'rail', 'nose'];
+    localStorage.setItem('bs.viewState', JSON.stringify(raw));
+    // Filtered, and back in registry order rather than the order they were written.
+    expect(loadViewState().sidebar!.specGroups).toEqual(['nose', 'overall']);
+  });
+
   it('keeps an empty open set, which is what collapse-all writes', () => {
     // `[]` must survive as itself — falling back to the defaults here would
     // silently re-open three sections on every reload after a collapse-all.
-    saveViewState({ ...DEFAULT_VIEW_STATE, sidebar: { collapsed: false, open: [], touched: [] } });
+    saveViewState({
+      ...DEFAULT_VIEW_STATE,
+      sidebar: { ...DEFAULT_SIDEBAR_STATE, open: [], touched: [] },
+    });
     expect(loadViewState().sidebar!.open).toEqual([]);
   });
 });

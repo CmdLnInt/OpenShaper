@@ -27,9 +27,15 @@ export default function DocsSpecs() {
           while the numbers catch up.
         </p>
         <p>
-          Specs is the one section that starts open. Collapsed, its header still carries the volume;
-          folded to the rail, the sidebar still carries the headline dimensions — so the numbers you
-          check most are never more than a glance away, whatever else you have shut.
+          The readout is written in four bands — Nose, Center, Tail and Overall — and each one
+          collapses. Overall starts open; the other three start shut, with the number that band is
+          usually consulted for on its header, so the whole readout fits a laptop screen without
+          scrolling. Open as many as you want; the choice is remembered.
+        </p>
+        <p>
+          Specs has its own tab, so it is always one click away, and the headline dimensions and
+          volume stay on the tab strip even when the panel is folded away — the numbers you check
+          most are never more than a glance from wherever you are working.
         </p>
       </Section>
 

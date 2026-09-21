@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { SIDEBAR_SECTIONS, tabById } from '../src/sidebar-sections';
 
 /**
  * Wait for the editor to be usable.
@@ -20,15 +21,23 @@ export async function editorReady(page: Page): Promise<void> {
 }
 
 /**
- * Expand a sidebar section by its header name.
+ * Reach a sidebar tool by its section title: select its tab, then expand it.
  *
- * The sidebar is an accordion and most sections start collapsed, with the body
- * unmounted rather than hidden, so a test that wants a control inside one has to
- * open it the same way a user does. Idempotent: an already-open section is left
- * alone, so a spec can call this without knowing the current view's defaults.
+ * The sidebar is a tab strip over an accordion, so a tool is only in the DOM when its
+ * tab is active and only expanded when its section is open. Which tab owns which tool
+ * comes from the registry rather than each spec, so moving a tool between tabs does not
+ * touch any spec. Idempotent, and a tab holding one tool renders it bare with no header
+ * to click.
  */
 export async function openSection(page: Page, name: string): Promise<void> {
+  const section = SIDEBAR_SECTIONS.find((s) => s.title === name);
+  if (!section) throw new Error(`Unknown sidebar section: ${name}`);
+
+  const tab = page.getByRole('tab', { name: tabById(section.tab).title });
+  await tab.waitFor();
+  if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
+
   const header = page.getByRole('button', { name, exact: true });
-  await header.waitFor();
+  if ((await header.count()) === 0) return; // rendered bare
   if ((await header.getAttribute('aria-expanded')) !== 'true') await header.click();
 }
