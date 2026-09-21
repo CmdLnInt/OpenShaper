@@ -4,6 +4,7 @@ import { App } from './App';
 import { boardStore } from './store';
 import { STORAGE_KEY } from './recent-boards';
 import { openSection } from './test/sidebar';
+import { VIEW_TOGGLE_HINT } from './view-toolkit';
 
 // The 3D pane lazy-loads three.js/fiber, which need WebGL — stub the whole package.
 vi.mock('@openshaper/render3d', () => ({ Board3DView: () => null }));
@@ -47,6 +48,57 @@ describe('<App /> smoke', () => {
 
     expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
     expect(paneHeaders().map((header) => header.className)).toEqual(before);
+  });
+
+  it.each([
+    ['Outline', 'Rocker (deck + bottom)'],
+    [/Cross-section/, 'Outline'],
+    ['Rocker (deck + bottom)', 'Outline'],
+    ['3D', 'Outline'],
+  ])(
+    'toggles the %s pane between quad and maximized on title double-click',
+    async (title, otherTitle) => {
+      render(<App />);
+      await screen.findAllByText(/[\d.]+ liters/);
+
+      const heading = screen.getByRole('heading', { name: title });
+      fireEvent.doubleClick(heading);
+
+      const maximizedHeading = screen.getByRole('heading', { name: title });
+      expect(screen.queryByRole('heading', { name: otherTitle })).toBeNull();
+
+      fireEvent.doubleClick(maximizedHeading);
+
+      expect(screen.getByRole('heading', { name: title })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: otherTitle })).toBeTruthy();
+    },
+  );
+
+  it('advertises the double-click toggle on the titles that carry it', async () => {
+    render(<App />);
+    await screen.findAllByText(/[\d.]+ liters/);
+
+    // The hint is the whole affordance — a double-click has no visible control of
+    // its own — and `select-none` keeps the switch from leaving the title
+    // highlighted behind the view it just opened.
+    for (const name of ['Outline', '3D']) {
+      const heading = screen.getByRole('heading', { name });
+      expect(heading.getAttribute('title')).toBe(VIEW_TOGGLE_HINT);
+      expect(heading.className).toContain('select-none');
+      expect(heading.className).toContain('cursor-pointer');
+    }
+    // A title with no handler stays a plain heading: the sidebar panels are not views.
+    expect(screen.getByRole('heading', { name: 'Specs' }).getAttribute('title')).toBeNull();
+  });
+
+  it('does not maximize a quad pane when a title-bar control is double-clicked', async () => {
+    render(<App />);
+    await screen.findAllByText(/[\d.]+ liters/);
+
+    fireEvent.doubleClick(screen.getByRole('button', { name: 'Stringer' }));
+
+    expect(screen.getByRole('heading', { name: 'Outline' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '3D' })).toBeTruthy();
   });
 
   it('uses the File-menu palette for the Display units selector and its options', () => {

@@ -78,6 +78,39 @@ export function ViewPaneHeader({ className, ...props }: React.ComponentProps<typ
   return <PanelHeader className={cn('min-h-14 pointer-coarse:px-2', className)} {...props} />;
 }
 
+/** Hover hint for the pane titles that toggle between Quad and a single view. */
+export const VIEW_TOGGLE_HINT = 'Double-click to switch between this view and Quad';
+
+/**
+ * A pane title that doubles as the Quad <-> single-view toggle.
+ *
+ * Double-click is a mouse-only shorthand — the tab strip and the number keys in
+ * `shortcuts.ts` remain the discoverable route, and a tier that does not offer the
+ * target view simply ignores it. So the heading only advertises itself when a
+ * handler is actually wired: a pointer cursor, the hint above, and `select-none`,
+ * without which a double-click leaves the title text highlighted behind the view
+ * it just switched to.
+ */
+export function ViewToggleTitle({
+  className,
+  onDoubleClick,
+  children,
+}: {
+  className?: string;
+  onDoubleClick?: React.MouseEventHandler<HTMLHeadingElement>;
+  children: React.ReactNode;
+}) {
+  return (
+    <PanelTitle
+      className={cn(onDoubleClick && 'cursor-pointer select-none', className)}
+      title={onDoubleClick ? VIEW_TOGGLE_HINT : undefined}
+      onDoubleClick={onDoubleClick}
+    >
+      {children}
+    </PanelTitle>
+  );
+}
+
 // --- small atoms -----------------------------------------------------------
 
 /** A label/value row used throughout the spec + weight panels. */
@@ -364,6 +397,7 @@ export function EditorPane({
   initialView,
   onViewChange,
   headerActions,
+  onTitleDoubleClick,
   settings,
 }: {
   title: string;
@@ -389,6 +423,7 @@ export function EditorPane({
   initialView?: React.ComponentProps<typeof SplineEditor>['initialView'];
   onViewChange?: React.ComponentProps<typeof SplineEditor>['onViewChange'];
   headerActions?: React.ReactNode;
+  onTitleDoubleClick?: React.MouseEventHandler<HTMLHeadingElement>;
   /** Optional visual settings (colors, sizes). When absent the draw defaults apply. */
   settings?: EditorSettings;
 }) {
@@ -416,7 +451,9 @@ export function EditorPane({
         scrolls sideways rather than either of them adding a row.
       */}
       <ViewPaneHeader className="gap-2">
-        <PanelTitle className="mr-auto min-w-0 truncate">{title}</PanelTitle>
+        <ViewToggleTitle className="mr-auto min-w-0 truncate" onDoubleClick={onTitleDoubleClick}>
+          {title}
+        </ViewToggleTitle>
         <SelectedPointEditor
           store={boardStore}
           units={units}

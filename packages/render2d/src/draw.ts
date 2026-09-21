@@ -326,7 +326,7 @@ const SECTION_MARKER_HANDLE_RADIUS = 5;
  * Draw vertical section-position markers across the outline/rocker view (legacy
  * "cross-section positions"). Dashed and cyan/teal so they read as *stations*,
  * clearly distinct from the solid neutral-grey reference grid: the active section
- * is a bold solid cyan line, the rest are faint teal dashes.
+ * is a solid cyan line, the rest are faint teal dashes.
  */
 /** Which of a marker's two diamond grips a pointer is working with. */
 export type SectionHandle = 'top' | 'bottom';
@@ -356,7 +356,7 @@ export const drawSectionMarkers = (
     const color = highlighted ? '#22D3EE' : 'rgba(45,212,191,0.65)';
     ctx.strokeStyle = color;
     ctx.fillStyle = m.index === focusedIndex ? '#F97316' : color;
-    ctx.lineWidth = highlighted ? 2 : 1;
+    ctx.lineWidth = 1;
     ctx.setLineDash(highlighted ? [] : [3, 4]);
     ctx.beginPath();
     ctx.moveTo(x, 0);
@@ -870,7 +870,7 @@ export const drawVProbe = (
   ctx.stroke();
   ctx.globalAlpha = 1;
   ctx.setLineDash([]);
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1;
   ctx.beginPath();
   const ys = vCrossings(profile, x);
   for (let i = 0; i + 1 < ys.length; i += 2) {
@@ -903,7 +903,7 @@ export const drawHProbe = (
   ctx.stroke();
   ctx.globalAlpha = 1;
   ctx.setLineDash([]);
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1;
   ctx.beginPath();
   const xs = hCrossings(profile, y);
   for (let i = 0; i + 1 < xs.length; i += 2) {
