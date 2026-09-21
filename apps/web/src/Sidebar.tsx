@@ -3,11 +3,13 @@
  * trace-image controls, the control-point inspector, analysis toggles, and the
  * ghost comparison.
  *
- * Every tool is a collapsible section (`Disclosure`) drawn from the registry in
- * `sidebar-sections.ts`, in registry order, under three group labels. What is open is
- * decided by the shell — per-view relevance, the master collapse-all, and the user's
- * own toggles all flow through `SidebarState` — so this file only renders it. On the
- * desktop tier the whole thing folds to a 40px rail that keeps the headline dims.
+ * Four tabs down a permanent 64px strip at the edge, drawn from the registry in
+ * `sidebar-sections.ts`; each holds one to three tools as collapsible sections
+ * (`Disclosure`). The strip is what stops the tool list being displaced by the tool you
+ * have open. What is open is decided by the shell — the active and pinned tabs, per-view
+ * relevance, the master collapse-all and the user's own toggles all flow through
+ * `SidebarState` — so this file only renders it. On the desktop tier the panel folds
+ * away and the strip alone remains, still carrying the board's headline dims.
  *
  * State is owned by the app shell and threaded in as props — this component is purely
  * presentational so the shell stays the single source of truth (several of these values
@@ -146,12 +148,16 @@ export interface SidebarProps {
   ghost: boolean;
   ghostSpecs: BoardSpecs | null;
 
-  /** Which sections are open, which the user owns, and whether the rail is folded. */
+  /**
+   * Which tab is active, which is pinned, which sections and spec bands are open, and
+   * which of those the user has taken over from the per-view rule.
+   */
   sidebar: SidebarState;
   onSidebarChange: (next: SidebarState) => void;
   /**
-   * Offer the fold-to-rail control. Desktop only: in the bottom sheet the snap
-   * points already are the collapse, and a rail inside a sheet is nonsense.
+   * Desktop tier: lay the strip out vertically beside the panel and offer the fold.
+   * In the sheet the tabs become a row and the snap points already are the collapse, so
+   * a second fold control there would be one too many.
    */
   collapsible?: boolean;
 
@@ -623,7 +629,7 @@ function SupportFooter() {
   );
 }
 
-/** The same ask at rail width, where only the cup fits. */
+/** The same ask at strip width, where only the cup fits. */
 function SupportRailLink() {
   if (!SUPPORT_URL) return null;
   return (

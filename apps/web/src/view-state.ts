@@ -64,9 +64,9 @@ export interface ViewState {
   /** 3D appearance + analysis settings; absent on blobs written before they were saved. */
   view3d?: View3DSettings;
   /**
-   * Sidebar shape: folded to its rail, which sections are expanded, and which the
-   * user has toggled by hand (see `sidebar-sections.ts`). Absent on blobs written
-   * before the sidebar became an accordion.
+   * Sidebar shape: the active and pinned tabs, whether the panel is folded away, and
+   * which sections and spec bands are expanded (see `sidebar-sections.ts`). Absent on
+   * blobs written before the sidebar grew tabs.
    */
   sidebar?: SidebarState;
 }
