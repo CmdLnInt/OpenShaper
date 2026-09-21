@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { boardStore } from './store';
 import { STORAGE_KEY } from './recent-boards';
+import { VIEW_TOGGLE_HINT } from './view-toolkit';
 
 // The 3D pane lazy-loads three.js/fiber, which need WebGL — stub the whole package.
 vi.mock('@openshaper/render3d', () => ({ Board3DView: () => null }));
@@ -71,6 +72,23 @@ describe('<App /> smoke', () => {
       expect(screen.getByRole('heading', { name: otherTitle })).toBeTruthy();
     },
   );
+
+  it('advertises the double-click toggle on the titles that carry it', async () => {
+    render(<App />);
+    await screen.findAllByText(/[\d.]+ liters/);
+
+    // The hint is the whole affordance — a double-click has no visible control of
+    // its own — and `select-none` keeps the switch from leaving the title
+    // highlighted behind the view it just opened.
+    for (const name of ['Outline', '3D']) {
+      const heading = screen.getByRole('heading', { name });
+      expect(heading.getAttribute('title')).toBe(VIEW_TOGGLE_HINT);
+      expect(heading.className).toContain('select-none');
+      expect(heading.className).toContain('cursor-pointer');
+    }
+    // A title with no handler stays a plain heading: the sidebar panels are not views.
+    expect(screen.getByRole('heading', { name: 'Specs' }).getAttribute('title')).toBeNull();
+  });
 
   it('does not maximize a quad pane when a title-bar control is double-clicked', async () => {
     render(<App />);
