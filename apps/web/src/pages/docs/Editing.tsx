@@ -46,6 +46,12 @@ export default function DocsEditing() {
           between the single views instead.
         </p>
         <p>
+          With a mouse there is a shortcut that skips the tabs:{' '}
+          <strong>double-click a pane title</strong> in the quad view to blow that pane up to the
+          full viewport, and double-click the title again to drop back to quad. The controls in the
+          title bar are unaffected — only the title itself switches views.
+        </p>
+        <p>
           On a touch screen, outline and rocker are drawn <strong>nose-up</strong> whenever the pane
           is taller than it is wide — which on a phone held upright it is. A board is about four
           times longer than it is wide, so lying it across a narrow pane wastes most of the height;
