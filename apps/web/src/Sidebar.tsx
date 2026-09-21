@@ -110,6 +110,30 @@ const TAB_ICONS: Record<TabId, LucideIcon> = {
   reference: HistoryIcon,
 };
 
+/**
+ * The sidebar's dimensions, in one place.
+ *
+ * These are the values most likely to be adjusted by eye — they were scattered across
+ * four inline class lists, and finding them all again took a grep. Each is used exactly
+ * once below; the point is that a nudge to the strip's width or a tab's height is a
+ * one-line edit somebody can find, not an archaeology exercise.
+ *
+ * `pointer-coarse:` variants are the 44px ergonomic floor for a finger and should not be
+ * tuned below it — `e2e/tap-targets.spec.ts` is the budget that enforces this.
+ */
+const SIZING = {
+  /** Width of the vertical strip. Must fit the longest caption at 9px — "SHAPE". */
+  strip: 'w-14',
+  /** One vertical tab: a 16px icon over a 9px caption needs ~30px of the 44px floor. */
+  tab: 'min-h-11 gap-0.5 px-0.5 py-1 pointer-coarse:min-h-12',
+  /** Width of the panel beside the strip. With the strip, the sidebar's total. */
+  panel: 'w-64',
+  /** Ceiling on a pinned panel, which yields height to the one being worked in. */
+  pinnedPanel: 'max-h-[45%]',
+  /** The support bar across the bottom. */
+  support: 'h-9 pointer-coarse:h-11',
+} as const;
+
 export interface ResizeFields {
   l: string;
   w: string;
@@ -275,7 +299,10 @@ export function Sidebar({
 
         {!(collapsible && sidebar.collapsed) && (
           <div
-            className={cn('flex min-h-0 flex-col gap-2', collapsible ? 'w-64 flex-1' : 'w-full')}
+            className={cn(
+              'flex min-h-0 flex-col gap-2',
+              collapsible ? `${SIZING.panel} flex-1` : 'w-full',
+            )}
           >
             {/* First, deliberately: the sheet opens at `half` and everything past the
               first panel is already below the fold there, so a control banished from
@@ -305,7 +332,7 @@ export function Sidebar({
                   /* The pinned panel is a reference held on screen, so it yields height
                    to the one being worked in rather than splitting evenly. */
                   className={cn(
-                    isPinnedSlot ? 'max-h-[45%] shrink-0' : 'min-h-0 flex-1',
+                    isPinnedSlot ? `${SIZING.pinnedPanel} shrink-0` : 'min-h-0 flex-1',
                     collapsible && 'overflow-hidden',
                   )}
                   /* A pinned panel taller than its slot was cutting a spec row in half,
@@ -363,7 +390,7 @@ function TabStrip({
       className={cn(
         'flex shrink-0 gap-0.5',
         vertical
-          ? 'w-14 flex-col rounded-lg border border-border bg-card py-0.5'
+          ? `${SIZING.strip} flex-col rounded-lg border border-border bg-card py-0.5`
           : 'no-scrollbar w-full flex-row items-stretch overflow-x-auto',
       )}
     >
@@ -639,7 +666,8 @@ function SupportFooter({
       aria-label="Buy me a coffee"
       title="Buy me a coffee — OpenShaper is free & open-source"
       className={cn(
-        'mt-2 flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-card text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground pointer-coarse:h-11',
+        'mt-2 flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground',
+        SIZING.support,
         compact ? 'justify-center px-0' : 'px-2.5',
         // In the sheet the sheet body is the scroller and the bar is inside it, so flex
         // alone would leave it at the end of a long scroll — which is exactly where this
