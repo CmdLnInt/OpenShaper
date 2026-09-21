@@ -57,8 +57,8 @@ export const DEFAULT_SETTINGS: EditorSettings = {
   gridColor: '#8A9BB3',
   // Fin blades: the OpenShaper brand cyan (matches the FIN_COLOR default in Fins3D).
   finColor: '#22D3EE',
-  controlPointSize: 5,
-  curveThickness: 2,
+  controlPointSize: 3,
+  curveThickness: 1,
   // Slave cross-sections to the rocker/deck/outline by default (today's behavior).
   adjustCrossSectionThickness: true,
 };

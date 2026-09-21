@@ -113,12 +113,12 @@ describe('cross-section markers', () => {
     expect(hitSectionMarker([marker], VP, { x: screenX, y: height / 2 }, height)).toBeNull();
   });
 
-  it('promotes a hovered marker to the active cyan line treatment', () => {
+  it('promotes a hovered marker to the active cyan treatment without thickening it', () => {
     const { ctx } = makeCtx();
     drawSectionMarkers(ctx, [marker], VP, height, marker.index);
 
     expect(ctx.strokeStyle).toBe('#22D3EE');
-    expect(ctx.lineWidth).toBe(2);
+    expect(ctx.lineWidth).toBe(1);
   });
 
   it('draws the position chip only for the marker being dragged', () => {
@@ -170,13 +170,13 @@ describe('cross-section markers', () => {
     expect(ctx.fillText).not.toHaveBeenCalled();
   });
 
-  it('draws a focused marker with an orange diamond and highlighted line', () => {
+  it('draws a focused marker with an orange diamond and 1px highlighted line', () => {
     const { ctx } = makeCtx();
     drawSectionMarkers(ctx, [marker], VP, height, null, marker.index);
 
     expect(ctx.fillStyle).toBe('#F97316');
     expect(ctx.strokeStyle).toBe('#22D3EE');
-    expect(ctx.lineWidth).toBe(2);
+    expect(ctx.lineWidth).toBe(1);
   });
 });
 
@@ -458,9 +458,15 @@ describe('drawMeasureCursor', () => {
   function makeCursorCtx() {
     const moves: { x: number; y: number }[] = [];
     const dashes: number[][] = [];
+    const lineWidths: number[] = [];
     const ctx = {
       strokeStyle: '',
-      lineWidth: 0,
+      set lineWidth(value: number) {
+        lineWidths.push(value);
+      },
+      get lineWidth() {
+        return lineWidths.at(-1) ?? 0;
+      },
       globalAlpha: 1,
       save: vi.fn(),
       restore: vi.fn(),
@@ -470,7 +476,7 @@ describe('drawMeasureCursor', () => {
       lineTo: vi.fn(),
       stroke: vi.fn(),
     } as unknown as CanvasRenderingContext2D;
-    return { ctx, moves, dashes };
+    return { ctx, moves, dashes, lineWidths };
   }
 
   // A 4×4 square centred on the origin (a stand-in closed cross-section outline).
@@ -482,7 +488,7 @@ describe('drawMeasureCursor', () => {
   ];
 
   it('emits a dashed full-extent line + a solid inside segment for each axis', () => {
-    const { ctx, moves, dashes } = makeCursorCtx();
+    const { ctx, moves, dashes, lineWidths } = makeCursorCtx();
     // Cursor at the centre is inside the square, so each probe has one inside span.
     drawMeasureCursor(ctx, square, { scale: 10, originX: 100, originY: 100 }, 200, 200, {
       x: 0,
@@ -493,6 +499,7 @@ describe('drawMeasureCursor', () => {
     // Both a dashed pass ([4,4]) and a solid pass ([]) happened.
     expect(dashes.some((d) => d.length === 2)).toBe(true);
     expect(dashes.some((d) => d.length === 0)).toBe(true);
+    expect(lineWidths).toEqual([1, 1, 1, 1]);
     // Composed of a vertical + horizontal probe, each balancing its own save/restore.
     expect(ctx.save).toHaveBeenCalledTimes(2);
     expect(ctx.restore).toHaveBeenCalledTimes(2);
