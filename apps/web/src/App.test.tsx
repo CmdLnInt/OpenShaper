@@ -48,6 +48,40 @@ describe('<App /> smoke', () => {
     expect(paneHeaders().map((header) => header.className)).toEqual(before);
   });
 
+  it.each([
+    ['Outline', 'Rocker (deck + bottom)'],
+    [/Cross-section/, 'Outline'],
+    ['Rocker (deck + bottom)', 'Outline'],
+    ['3D', 'Outline'],
+  ])(
+    'toggles the %s pane between quad and maximized on title double-click',
+    async (title, otherTitle) => {
+      render(<App />);
+      await screen.findAllByText(/[\d.]+ liters/);
+
+      const heading = screen.getByRole('heading', { name: title });
+      fireEvent.doubleClick(heading);
+
+      const maximizedHeading = screen.getByRole('heading', { name: title });
+      expect(screen.queryByRole('heading', { name: otherTitle })).toBeNull();
+
+      fireEvent.doubleClick(maximizedHeading);
+
+      expect(screen.getByRole('heading', { name: title })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: otherTitle })).toBeTruthy();
+    },
+  );
+
+  it('does not maximize a quad pane when a title-bar control is double-clicked', async () => {
+    render(<App />);
+    await screen.findAllByText(/[\d.]+ liters/);
+
+    fireEvent.doubleClick(screen.getByRole('button', { name: 'Stringer' }));
+
+    expect(screen.getByRole('heading', { name: 'Outline' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '3D' })).toBeTruthy();
+  });
+
   it('uses the File-menu palette for the Display units selector and its options', () => {
     render(<App />);
 
