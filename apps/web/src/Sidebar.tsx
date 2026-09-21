@@ -258,69 +258,74 @@ export function Sidebar({
   return (
     <aside
       aria-label="Board panels"
-      className={cn(
-        'flex min-h-0 shrink-0 gap-2',
-        // Desktop: strip beside the panel, fixed overall width. In the sheet the strip
-        // is a row above the panel, so the whole thing is one column at full width.
-        collapsible ? 'flex-row' : 'w-full flex-col',
-      )}
+      // A column in both mounts now, so the support bar can span the full width along
+      // the bottom. Above it, the desktop tier puts the strip beside the panel while the
+      // sheet stacks a row of tabs over it.
+      className={cn('flex min-h-0 shrink-0 flex-col', collapsible ? '' : 'w-full')}
     >
-      <TabStrip
-        sidebar={sidebar}
-        onSidebarChange={onSidebarChange}
-        specs={specs}
-        units={units}
-        vertical={collapsible}
-        hasTrace={hasTrace}
-      />
+      <div className={cn('flex min-h-0 flex-1 gap-2', collapsible ? 'flex-row' : 'flex-col')}>
+        <TabStrip
+          sidebar={sidebar}
+          onSidebarChange={onSidebarChange}
+          specs={specs}
+          units={units}
+          vertical={collapsible}
+          hasTrace={hasTrace}
+        />
 
-      {!(collapsible && sidebar.collapsed) && (
-        <div className={cn('flex min-h-0 flex-col gap-2', collapsible ? 'w-64 flex-1' : 'w-full')}>
-          {/* First, deliberately: the sheet opens at `half` and everything past the
+        {!(collapsible && sidebar.collapsed) && (
+          <div
+            className={cn('flex min-h-0 flex-col gap-2', collapsible ? 'w-64 flex-1' : 'w-full')}
+          >
+            {/* First, deliberately: the sheet opens at `half` and everything past the
               first panel is already below the fold there, so a control banished from
               the toolbar must not land somewhere worse than where it came from. */}
-          {onUnitChange && (
-            <Panel>
-              <PanelBody className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Display units</span>
-                <UnitSelect value={units.key} onChange={onUnitChange} />
-              </PanelBody>
-            </Panel>
-          )}
+            {onUnitChange && (
+              <Panel>
+                <PanelBody className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">Display units</span>
+                  <UnitSelect value={units.key} onChange={onUnitChange} />
+                </PanelBody>
+              </Panel>
+            )}
 
-          {tabs.map((id, i) => {
-            const isPinnedSlot = tabs.length === 2 && i === 0;
-            return (
-              <TabPanel
-                key={id}
-                tab={id}
-                sidebar={sidebar}
-                onSidebarChange={onSidebarChange}
-                bodies={bodies}
-                summaries={summaries}
-                hasTrace={hasTrace}
-                specs={specs}
-                units={units}
-                /* The pinned panel is a reference held on screen, so it yields height
+            {tabs.map((id, i) => {
+              const isPinnedSlot = tabs.length === 2 && i === 0;
+              return (
+                <TabPanel
+                  key={id}
+                  tab={id}
+                  sidebar={sidebar}
+                  onSidebarChange={onSidebarChange}
+                  bodies={bodies}
+                  summaries={summaries}
+                  hasTrace={hasTrace}
+                  specs={specs}
+                  units={units}
+                  /* The pinned panel is a reference held on screen, so it yields height
                    to the one being worked in rather than splitting evenly. */
-                className={cn(
-                  isPinnedSlot ? 'max-h-[45%] shrink-0' : 'min-h-0 flex-1',
-                  collapsible && 'overflow-hidden',
-                )}
-                /* A pinned panel taller than its slot was cutting a spec row in half,
+                  className={cn(
+                    isPinnedSlot ? 'max-h-[45%] shrink-0' : 'min-h-0 flex-1',
+                    collapsible && 'overflow-hidden',
+                  )}
+                  /* A pinned panel taller than its slot was cutting a spec row in half,
                    which reads as broken rather than as "there is more below". Fading the
                    last few pixels says it continues; over content that already fits, it
                    falls on empty space and shows nothing. */
-                fade={isPinnedSlot}
-                collapsible={collapsible}
-                showFold={collapsible && !isPinnedSlot}
-              />
-            );
-          })}
+                  fade={isPinnedSlot}
+                  collapsible={collapsible}
+                  showFold={collapsible && !isPinnedSlot}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-          {!collapsible && <SupportFooter />}
-        </div>
-      )}
+      {/* Pinned across the bottom of the whole sidebar, not tucked into the strip:
+          the ask is the same at every width, and it is the last thing left when
+          everything else folds away. Narrow, it is the cup alone. */}
+      <SupportFooter compact={collapsible && sidebar.collapsed} sticky={!collapsible} />
     </aside>
   );
 }
@@ -358,7 +363,7 @@ function TabStrip({
       className={cn(
         'flex shrink-0 gap-0.5',
         vertical
-          ? 'w-16 flex-col rounded-lg border border-border bg-card py-1'
+          ? 'w-14 flex-col rounded-lg border border-border bg-card py-0.5'
           : 'no-scrollbar w-full flex-row items-stretch overflow-x-auto',
       )}
     >
@@ -366,7 +371,7 @@ function TabStrip({
         role="tablist"
         aria-label="Sidebar tools"
         aria-orientation={vertical ? 'vertical' : 'horizontal'}
-        className={cn('flex gap-0.5', vertical ? 'flex-col px-1' : 'flex-row')}
+        className={cn('flex gap-0.5', vertical ? 'flex-col px-0.5' : 'flex-row')}
       >
         {SIDEBAR_TABS.map((tab) => {
           const Icon = TAB_ICONS[tab.id];
@@ -381,9 +386,12 @@ function TabStrip({
               title={tab.title}
               onClick={() => onSidebarChange(selectTab(sidebar, tab.id))}
               className={cn(
-                'relative flex items-center gap-1 rounded-md transition-colors',
+                'relative flex items-center rounded-md transition-colors',
                 vertical
-                  ? 'min-h-14 flex-col justify-center px-1 py-1.5 pointer-coarse:min-h-16'
+                  ? // Tight on purpose: a 16px icon over a 9px caption needs ~30px, and
+                    // the strip is chrome — every row it takes is a row of tools it is
+                    // standing in for. The coarse floor still applies to a finger.
+                    'min-h-11 flex-col justify-center gap-0.5 px-0.5 py-1 pointer-coarse:min-h-12'
                   : 'min-h-9 shrink-0 flex-row px-2.5 py-1 pointer-coarse:min-h-11',
                 active
                   ? 'bg-accent text-accent-foreground'
@@ -394,7 +402,7 @@ function TabStrip({
               <span
                 className={cn(
                   'font-semibold uppercase tracking-wide',
-                  vertical ? 'text-[9px] leading-none' : 'text-[11px]',
+                  vertical ? 'text-[9px] leading-none' : 'ml-1 text-[11px]',
                 )}
               >
                 {tab.label}
@@ -441,9 +449,6 @@ function TabStrip({
                 <span className="text-primary"> · {fmtVol(specs.volume)}</span>
               </span>
             )}
-          </div>
-          <div className="flex justify-center">
-            <SupportRailLink />
           </div>
         </>
       )}
@@ -607,30 +612,24 @@ function IconButton({
 }
 
 /**
- * The support ask, pinned below the scroll.
+ * The support ask, a bar across the bottom of the sidebar.
  *
  * It used to be a three-line card at the bottom of an eleven-panel scroll, which in
- * practice meant it was never on screen at all. One row that is always visible is a
- * smaller ask and a far louder one.
+ * practice meant it was never on screen at all. Pinned across the bottom it is a
+ * smaller ask and a far louder one — outside every scroller, present at every tier, and
+ * the last thing standing when the panel folds away.
+ *
+ * `compact` is the folded sidebar, where there is room for the cup and nothing else. The
+ * label is dropped rather than truncated: "Buy me a c…" is worse than the icon alone,
+ * and the icon still carries its title and accessible name.
  */
-function SupportFooter() {
-  if (!SUPPORT_URL) return null;
-  return (
-    <a
-      href={SUPPORT_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      title="Buy me a coffee — OpenShaper is free & open-source"
-      className="mt-auto flex h-9 shrink-0 items-center gap-2 border-t border-border px-2 text-xs text-muted-foreground transition-colors hover:text-foreground pointer-coarse:h-11"
-    >
-      <CoffeeIcon className="size-4 shrink-0 text-primary" />
-      <span className="truncate">Buy me a coffee</span>
-    </a>
-  );
-}
-
-/** The same ask at strip width, where only the cup fits. */
-function SupportRailLink() {
+function SupportFooter({
+  compact = false,
+  sticky = false,
+}: {
+  compact?: boolean;
+  sticky?: boolean;
+}) {
   if (!SUPPORT_URL) return null;
   return (
     <a
@@ -639,9 +638,19 @@ function SupportRailLink() {
       rel="noopener noreferrer"
       aria-label="Buy me a coffee"
       title="Buy me a coffee — OpenShaper is free & open-source"
-      className="grid size-8 shrink-0 place-items-center rounded-md text-primary transition-colors hover:bg-accent pointer-coarse:size-11"
+      className={cn(
+        'mt-2 flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-card text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground pointer-coarse:h-11',
+        compact ? 'justify-center px-0' : 'px-2.5',
+        // In the sheet the sheet body is the scroller and the bar is inside it, so flex
+        // alone would leave it at the end of a long scroll — which is exactly where this
+        // ask used to go unseen. Sticky is safe at the bottom in a way it was not at the
+        // top: the bar that had to stop being sticky was covering section headers that
+        // scroll-into-view parks against the top edge.
+        sticky && 'sticky bottom-0 z-10',
+      )}
     >
-      <CoffeeIcon className="size-4" />
+      <CoffeeIcon className="size-4 shrink-0 text-primary" />
+      {!compact && <span className="truncate">Buy me a coffee</span>}
     </a>
   );
 }
