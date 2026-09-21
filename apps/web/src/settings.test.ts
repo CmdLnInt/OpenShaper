@@ -36,6 +36,11 @@ describe('DEFAULT_SETTINGS', () => {
     expect(DEFAULT_SETTINGS.adjustCrossSectionThickness).toBe(true);
   });
 
+  it('defaults to fine editor strokes and control points', () => {
+    expect(DEFAULT_SETTINGS.curveThickness).toBe(1);
+    expect(DEFAULT_SETTINGS.controlPointSize).toBe(3);
+  });
+
   it('fills in adjustCrossSectionThickness from defaults for a pre-v2 blob', () => {
     // A v1 blob has no adjustCrossSectionThickness key; migration must supply it.
     const v1 = { ...DEFAULT_SETTINGS, version: 1 } as Partial<EditorSettings>;
