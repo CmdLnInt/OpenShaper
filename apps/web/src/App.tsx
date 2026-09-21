@@ -1224,6 +1224,7 @@ function AppShell() {
             viewCommand={viewCmd}
             initialView={pendingViews2d.current.outline}
             onViewChange={reportPaneView('outline')}
+            onTitleDoubleClick={() => selectView('outline')}
           />,
           <EditorPane
             key="crossSection"
@@ -1240,6 +1241,7 @@ function AppShell() {
             settings={settings}
             initialView={pendingViews2d.current.crossSection}
             onViewChange={reportPaneView('crossSection')}
+            onTitleDoubleClick={() => selectView('crossSection')}
           />,
           <EditorPane
             key="rocker"
@@ -1262,10 +1264,11 @@ function AppShell() {
             viewCommand={viewCmd}
             initialView={pendingViews2d.current.rocker}
             onViewChange={reportPaneView('rocker')}
+            onTitleDoubleClick={() => selectView('rocker')}
           />,
           <Panel key="3d" className="flex min-h-0 flex-col">
             <ViewPaneHeader className="flex items-center justify-between gap-2">
-              <PanelTitle>3D</PanelTitle>
+              <PanelTitle onDoubleClick={() => selectView('3d')}>3D</PanelTitle>
               <ThreeDControls settings={view3d} onChange={patchView3d} compact />
             </ViewPaneHeader>
             <PanelBody className="min-h-0 flex-1 p-0">
@@ -1496,7 +1499,7 @@ function AppShell() {
             <Panel className="flex h-full flex-col">
               <ViewPaneHeader className="flex items-center justify-between gap-3">
                 <div className="flex items-baseline gap-3">
-                  <PanelTitle>3D</PanelTitle>
+                  <PanelTitle onDoubleClick={() => selectView('quad')}>3D</PanelTitle>
                   <span className="text-xs text-muted-foreground">
                     drag to orbit • scroll to zoom
                   </span>
@@ -1551,6 +1554,7 @@ function AppShell() {
               settings={settings}
               initialView={pendingViews2d.current[view]}
               onViewChange={reportPaneView(view)}
+              onTitleDoubleClick={() => selectView('quad')}
             />
           )}
         </div>

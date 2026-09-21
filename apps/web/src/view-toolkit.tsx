@@ -364,6 +364,7 @@ export function EditorPane({
   initialView,
   onViewChange,
   headerActions,
+  onTitleDoubleClick,
   settings,
 }: {
   title: string;
@@ -389,6 +390,7 @@ export function EditorPane({
   initialView?: React.ComponentProps<typeof SplineEditor>['initialView'];
   onViewChange?: React.ComponentProps<typeof SplineEditor>['onViewChange'];
   headerActions?: React.ReactNode;
+  onTitleDoubleClick?: React.MouseEventHandler<HTMLHeadingElement>;
   /** Optional visual settings (colors, sizes). When absent the draw defaults apply. */
   settings?: EditorSettings;
 }) {
@@ -416,7 +418,9 @@ export function EditorPane({
         scrolls sideways rather than either of them adding a row.
       */}
       <ViewPaneHeader className="gap-2">
-        <PanelTitle className="mr-auto min-w-0 truncate">{title}</PanelTitle>
+        <PanelTitle className="mr-auto min-w-0 truncate" onDoubleClick={onTitleDoubleClick}>
+          {title}
+        </PanelTitle>
         <SelectedPointEditor
           store={boardStore}
           units={units}
