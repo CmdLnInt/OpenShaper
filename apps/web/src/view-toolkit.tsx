@@ -31,6 +31,7 @@ import {
 } from '@openshaper/ui';
 import { useMemo } from 'react';
 import { fmtLen, LENGTH_UNITS, type LengthUnit } from './format';
+import { LONGITUDINAL_MEASURES, type LongitudinalMeasure } from './longitudinal-measure';
 import { SelectedPointEditor } from './ControlPointInspector';
 import { boardStore } from './store';
 import type { EditorSettings } from './settings';
@@ -124,6 +125,30 @@ export function UnitSelect({
       {LENGTH_UNITS.map((u) => (
         <option key={u.key} value={u.key}>
           {u.label}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+export function LongitudinalMeasureSelect({
+  value,
+  onChange,
+}: {
+  value: LongitudinalMeasure;
+  onChange: (value: LongitudinalMeasure) => void;
+}) {
+  return (
+    <Select
+      value={value}
+      onChange={(event) => onChange(event.target.value as LongitudinalMeasure)}
+      title="Longitudinal measurements"
+      aria-label="Longitudinal measurements"
+      className="shrink-0 bg-card text-card-foreground [&>option]:bg-card [&>option]:text-card-foreground"
+    >
+      {LONGITUDINAL_MEASURES.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
         </option>
       ))}
     </Select>
@@ -277,7 +302,11 @@ export function ThreeDControls({
  * distance from the rail; rocker → rocker/thickness/%; cross-section → from-CL
  * & height.
  */
-export function makeReadout(kind: EditorKind, units: LengthUnit) {
+export function makeReadout(
+  kind: EditorKind,
+  units: LengthUnit,
+  longitudinalPosition: (x: number) => number = (x) => x,
+) {
   return (world: Vec2): { label: string; value: string; color?: string }[] => {
     const b = boardStore.getState().board;
     if (!b) return [];
@@ -288,7 +317,7 @@ export function makeReadout(kind: EditorKind, units: LengthUnit) {
     if (kind === 'outline') {
       const halfW = getWidthAtPos(b, world.x) / 2;
       return [
-        { label: 'Pos', value: L(world.x), color: cyan },
+        { label: 'Pos', value: L(longitudinalPosition(world.x)), color: cyan },
         { label: 'Width', value: L(getWidthAtPos(b, world.x)), color: cyan },
         { label: 'From rail', value: L(Math.max(0, halfW - Math.abs(world.y))) },
       ];
@@ -297,7 +326,7 @@ export function makeReadout(kind: EditorKind, units: LengthUnit) {
       const thk = getThicknessAtPos(b, world.x);
       const center = getThickness(b) || 1;
       return [
-        { label: 'Pos', value: L(world.x), color: cyan },
+        { label: 'Pos', value: L(longitudinalPosition(world.x)), color: cyan },
         { label: 'Rocker', value: L(getRockerAtPos(b, world.x)) },
         { label: 'Deck', value: L(getDeckAtPos(b, world.x)) },
         { label: 'Thick', value: `${L(thk)} (${((thk / center) * 100).toFixed(0)}%)`, color: cyan },
@@ -364,6 +393,8 @@ export function EditorPane({
   initialView,
   onViewChange,
   headerActions,
+  longitudinalPosition,
+  modelLongitudinalPosition,
   settings,
 }: {
   title: string;
@@ -389,6 +420,8 @@ export function EditorPane({
   initialView?: React.ComponentProps<typeof SplineEditor>['initialView'];
   onViewChange?: React.ComponentProps<typeof SplineEditor>['onViewChange'];
   headerActions?: React.ReactNode;
+  longitudinalPosition?: (x: number) => number;
+  modelLongitudinalPosition?: (distance: number) => number;
   /** Optional visual settings (colors, sizes). When absent the draw defaults apply. */
   settings?: EditorSettings;
 }) {
@@ -421,6 +454,8 @@ export function EditorPane({
           store={boardStore}
           units={units}
           targets={p.targets}
+          displayX={longitudinalPosition}
+          modelX={modelLongitudinalPosition}
           fallback={
             headerActions && <div className="flex shrink-0 items-center gap-1">{headerActions}</div>
           }
@@ -440,11 +475,11 @@ export function EditorPane({
           onFocusSection={onFocusSection}
           onMoveSection={kind !== 'crossSection' ? onMoveSection : undefined}
           onDeleteSection={kind !== 'crossSection' ? onDeleteSection : undefined}
-          formatSectionPosition={(cm) => fmtLen(cm, units)}
+          formatSectionPosition={(cm) => fmtLen(longitudinalPosition?.(cm) ?? cm, units)}
           onAddSectionAt={kind !== 'crossSection' ? onAddSectionAt : undefined}
           onScrub={kind !== 'crossSection' ? onScrub : undefined}
           allowTurn={allowTurn}
-          readout={makeReadout(kind, units)}
+          readout={makeReadout(kind, units, longitudinalPosition)}
           measureCursor={kind === 'crossSection'}
           overlays={overlays}
           ghostSplines={ghostSplines}

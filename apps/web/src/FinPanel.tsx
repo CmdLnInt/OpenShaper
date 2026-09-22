@@ -105,11 +105,15 @@ function FinInspector({
   units,
   index,
   spec,
+  displayX,
+  modelX,
 }: {
   store: StoreApi<BoardState>;
   units: LengthUnit;
   index: number;
   spec: FinSpec;
+  displayX: (x: number) => number;
+  modelX: (distance: number) => number;
 }) {
   const patch = (p: Partial<FinSpec>) => store.getState().updateFin(index, p);
   return (
@@ -126,9 +130,9 @@ function FinInspector({
       </label>
       <LenField
         label="From tail (trailing)"
-        valueCm={spec.trailingFromTail}
+        valueCm={displayX(spec.trailingFromTail)}
         units={units}
-        onCommit={(v) => patch({ trailingFromTail: Math.max(0, v) })}
+        onCommit={(v) => patch({ trailingFromTail: Math.max(0, modelX(v)) })}
       />
       {spec.side !== 0 && (
         <LenField
@@ -166,7 +170,17 @@ function FinInspector({
 }
 
 /** The Fins panel for the sidebar. */
-export function FinPanel({ store, units }: { store: StoreApi<BoardState>; units: LengthUnit }) {
+export function FinPanel({
+  store,
+  units,
+  displayX,
+  modelX,
+}: {
+  store: StoreApi<BoardState>;
+  units: LengthUnit;
+  displayX: (x: number) => number;
+  modelX: (distance: number) => number;
+}) {
   const board = useSyncExternalStore(store.subscribe, () => store.getState().board);
   const selectedFin = useSyncExternalStore(store.subscribe, () => store.getState().selectedFin);
   if (!board) return null;
@@ -223,6 +237,8 @@ export function FinPanel({ store, units }: { store: StoreApi<BoardState>; units:
                 units={units}
                 index={selectedFin}
                 spec={cfg.fins[selectedFin]!}
+                displayX={displayX}
+                modelX={modelX}
               />
             )}
             <p className="text-xs text-muted-foreground">

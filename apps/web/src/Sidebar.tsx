@@ -5,7 +5,13 @@
  * this component is purely presentational so the shell stays the single source of
  * truth (several of these values also drive the editor overlays).
  */
-import type { InterpolationType } from '@openshaper/kernel';
+import {
+  getRockerAtPos,
+  getThicknessAtPos,
+  getWidthAtPos,
+  type BezierBoard,
+  type InterpolationType,
+} from '@openshaper/kernel';
 import type { BoardSpecs } from '@openshaper/store';
 import {
   Button,
@@ -35,7 +41,8 @@ import { fmtDimsHeadline, fmtLen, fmtVol, parseLen, type LengthUnit } from './fo
 import type { TraceView, UseTrace } from './use-trace';
 import { FinPanel } from './FinPanel';
 import { boardStore } from './store';
-import { OverlayToggle, Sel, SpecRow, UnitSelect } from './view-toolkit';
+import { LongitudinalMeasureSelect, OverlayToggle, Sel, SpecRow, UnitSelect } from './view-toolkit';
+import type { LongitudinalMeasure } from './longitudinal-measure';
 import {
   fmtWeight,
   FOAM_TYPES,
@@ -56,6 +63,8 @@ function diffVol(cur: number, ghost: number): string {
   const d = cur - ghost;
   return `${d >= 0 ? '+' : '−'}${fmtVol(Math.abs(d))}`;
 }
+
+const FOOT = 30.48;
 
 /**
  * The most recent labelled undo steps, newest first. Clicking a step reverts the
@@ -119,6 +128,7 @@ export interface OverlayToggles {
 }
 
 export interface SidebarProps {
+  board: BezierBoard | null;
   specs: BoardSpecs | null;
   units: LengthUnit;
   interpolationType: InterpolationType;
@@ -149,9 +159,16 @@ export interface SidebarProps {
    * picker (the phone tier), so exactly one of the two is ever mounted.
    */
   onUnitChange?: (key: string) => void;
+  longitudinalMeasure: LongitudinalMeasure;
+  onLongitudinalMeasureChange?: (value: LongitudinalMeasure) => void;
+  displayX: (x: number) => number;
+  modelX: (distance: number) => number;
+  displayLength: number | null;
+  ghostDisplayLength: number | null;
 }
 
 export function Sidebar({
+  board,
   specs,
   units,
   interpolationType,
@@ -170,6 +187,12 @@ export function Sidebar({
   ghost,
   ghostSpecs,
   onUnitChange,
+  longitudinalMeasure,
+  onLongitudinalMeasureChange,
+  displayX,
+  modelX,
+  displayLength,
+  ghostDisplayLength,
 }: SidebarProps) {
   // Brief confirmation after copying the dimensions headline; resets itself.
   const [copied, setCopied] = useState(false);
@@ -178,6 +201,28 @@ export function Sidebar({
     const t = window.setTimeout(() => setCopied(false), 1500);
     return () => window.clearTimeout(t);
   }, [copied]);
+  const measured = (() => {
+    if (!board || !specs || longitudinalMeasure === 'projected') return specs;
+    const length = displayLength ?? specs.lengthOverCurve;
+    const tail1 = modelX(FOOT);
+    const tail2 = modelX(2 * FOOT);
+    const nose1 = modelX(Math.max(0, length - FOOT));
+    const nose2 = modelX(Math.max(0, length - 2 * FOOT));
+    const center = modelX(length / 2);
+    return {
+      ...specs,
+      centerWidth: getWidthAtPos(board, center),
+      thickness: getThicknessAtPos(board, center),
+      tailWidth: getWidthAtPos(board, tail1),
+      tailThickness: getThicknessAtPos(board, tail1),
+      tailRocker1: getRockerAtPos(board, tail1),
+      tailRocker2: getRockerAtPos(board, tail2),
+      noseWidth: getWidthAtPos(board, nose1),
+      noseThickness: getThicknessAtPos(board, nose1),
+      noseRocker1: getRockerAtPos(board, nose1),
+      noseRocker2: getRockerAtPos(board, nose2),
+    };
+  })();
 
   return (
     <div className="flex w-full min-h-0 shrink-0 flex-col gap-3 overflow-y-auto pr-0.5 lg:w-72">
@@ -188,7 +233,15 @@ export function Sidebar({
         <Panel>
           <PanelBody className="flex items-center justify-between gap-3 py-2 text-sm">
             <span className="text-muted-foreground">Display units</span>
-            <UnitSelect value={units.key} onChange={onUnitChange} />
+            <div className="flex gap-2">
+              {onLongitudinalMeasureChange && (
+                <LongitudinalMeasureSelect
+                  value={longitudinalMeasure}
+                  onChange={onLongitudinalMeasureChange}
+                />
+              )}
+              <UnitSelect value={units.key} onChange={onUnitChange} />
+            </div>
           </PanelBody>
         </Panel>
       )}
@@ -197,7 +250,7 @@ export function Sidebar({
           <PanelTitle>Specs</PanelTitle>
         </PanelHeader>
         <PanelBody className="space-y-1 text-sm">
-          {specs ? (
+          {specs && measured ? (
             <>
               <Tooltip label={copied ? 'Copied' : 'Copy dimensions'}>
                 <button
@@ -206,9 +259,9 @@ export function Sidebar({
                   className="flex w-full items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-left hover:bg-muted pointer-coarse:min-h-11"
                   onClick={() => {
                     const text = fmtDimsHeadline(
-                      specs.length,
+                      displayLength ?? specs.length,
                       specs.maxWidth,
-                      specs.thickness,
+                      measured.thickness,
                       units,
                     );
                     void navigator.clipboard
@@ -218,7 +271,12 @@ export function Sidebar({
                   }}
                 >
                   <span className="font-mono text-[13px] tabular-nums text-foreground">
-                    {fmtDimsHeadline(specs.length, specs.maxWidth, specs.thickness, units)}
+                    {fmtDimsHeadline(
+                      displayLength ?? specs.length,
+                      specs.maxWidth,
+                      measured.thickness,
+                      units,
+                    )}
                   </span>
                   {/* Copying changes nothing on screen, so without this the click reads
                       as broken — people click again. It was one of the editor's
@@ -232,39 +290,48 @@ export function Sidebar({
               </Tooltip>
 
               <SpecGroup title="Nose">
-                <SpecRow label={'Width @ 12"'} value={fmtLen(specs.noseWidth, units)} />
-                <SpecRow label={'Thickness @ 12"'} value={fmtLen(specs.noseThickness, units)} />
+                <SpecRow label={'Width @ 12"'} value={fmtLen(measured.noseWidth, units)} />
+                <SpecRow label={'Thickness @ 12"'} value={fmtLen(measured.noseThickness, units)} />
                 <SpecRow label="Rocker" value={fmtLen(specs.noseRocker, units)} />
-                <SpecRow label={'Rocker @ 12"'} value={fmtLen(specs.noseRocker1, units)} />
-                {specs.length >= 121.92 && (
-                  <SpecRow label={'Rocker @ 24"'} value={fmtLen(specs.noseRocker2, units)} />
+                <SpecRow label={'Rocker @ 12"'} value={fmtLen(measured.noseRocker1, units)} />
+                {(displayLength ?? specs.length) >= 121.92 && (
+                  <SpecRow label={'Rocker @ 24"'} value={fmtLen(measured.noseRocker2, units)} />
                 )}
               </SpecGroup>
 
               <SpecGroup title="Center">
                 <SpecRow label="Width" value={fmtLen(specs.maxWidth, units)} />
-                <SpecRow label="Wide point" value={fmtLen(specs.maxWidthPos, units)} />
-                <SpecRow label="Center width" value={fmtLen(specs.centerWidth, units)} />
-                <SpecRow label="Thickness" value={fmtLen(specs.thickness, units)} />
+                <SpecRow label="Wide point" value={fmtLen(displayX(specs.maxWidthPos), units)} />
+                <SpecRow label="Center width" value={fmtLen(measured.centerWidth, units)} />
+                <SpecRow label="Thickness" value={fmtLen(measured.thickness, units)} />
                 <SpecRow label="Max thickness" value={fmtLen(specs.maxThickness, units)} />
               </SpecGroup>
 
               <SpecGroup title="Tail">
-                <SpecRow label={'Width @ 12"'} value={fmtLen(specs.tailWidth, units)} />
-                <SpecRow label={'Thickness @ 12"'} value={fmtLen(specs.tailThickness, units)} />
+                <SpecRow label={'Width @ 12"'} value={fmtLen(measured.tailWidth, units)} />
+                <SpecRow label={'Thickness @ 12"'} value={fmtLen(measured.tailThickness, units)} />
                 <SpecRow label="Rocker" value={fmtLen(specs.tailRocker, units)} />
-                <SpecRow label={'Rocker @ 12"'} value={fmtLen(specs.tailRocker1, units)} />
-                {specs.length >= 121.92 && (
-                  <SpecRow label={'Rocker @ 24"'} value={fmtLen(specs.tailRocker2, units)} />
+                <SpecRow label={'Rocker @ 12"'} value={fmtLen(measured.tailRocker1, units)} />
+                {(displayLength ?? specs.length) >= 121.92 && (
+                  <SpecRow label={'Rocker @ 24"'} value={fmtLen(measured.tailRocker2, units)} />
                 )}
               </SpecGroup>
 
               <SpecGroup title="Overall">
-                <SpecRow label="Length" value={fmtLen(specs.length, units)} />
-                <SpecRow label="Length o/curve" value={fmtLen(specs.lengthOverCurve, units)} />
+                <SpecRow label="Length" value={fmtLen(displayLength ?? specs.length, units)} />
+                <SpecRow
+                  label={longitudinalMeasure === 'rocker' ? 'Projected length' : 'Length o/curve'}
+                  value={fmtLen(
+                    longitudinalMeasure === 'rocker' ? specs.length : specs.lengthOverCurve,
+                    units,
+                  )}
+                />
                 <SpecRow label="Max rocker" value={fmtLen(specs.maxRocker, units)} />
                 <SpecRow label="Volume" value={fmtVol(specs.volume)} />
-                <SpecRow label="Center of mass" value={fmtLen(specs.centerOfMass, units)} />
+                <SpecRow
+                  label="Center of mass"
+                  value={fmtLen(displayX(specs.centerOfMass), units)}
+                />
               </SpecGroup>
 
               <div className="flex items-center justify-between gap-2 pt-1">
@@ -297,7 +364,7 @@ export function Sidebar({
         <PanelBody className="space-y-2 text-sm">
           {(
             [
-              ['l', 'Length', specs?.length],
+              ['l', 'Length', displayLength ?? specs?.length],
               ['w', 'Width', specs?.maxWidth],
               ['t', 'Thickness', specs?.thickness],
             ] as const
@@ -347,7 +414,7 @@ export function Sidebar({
         </PanelBody>
       </Panel>
 
-      <FinPanel store={boardStore} units={units} />
+      <FinPanel store={boardStore} units={units} displayX={displayX} modelX={modelX} />
 
       <Panel>
         <PanelHeader>
@@ -433,7 +500,14 @@ export function Sidebar({
             <PanelTitle>Compare (Δ vs ghost)</PanelTitle>
           </PanelHeader>
           <PanelBody className="space-y-1 text-sm">
-            <SpecRow label="Length" value={diffLen(specs.length, ghostSpecs.length, units)} />
+            <SpecRow
+              label="Length"
+              value={diffLen(
+                displayLength ?? specs.length,
+                ghostDisplayLength ?? ghostSpecs.length,
+                units,
+              )}
+            />
             <SpecRow label="Width" value={diffLen(specs.maxWidth, ghostSpecs.maxWidth, units)} />
             <SpecRow
               label="Thickness"

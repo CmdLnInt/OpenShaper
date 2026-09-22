@@ -134,10 +134,14 @@ export function SelectedPointEditor({
   units,
   targets,
   fallback,
+  displayX = (value) => value,
+  modelX = (value) => value,
 }: {
   store: StoreApi<BoardState>;
   units: LengthUnit;
   targets: SplineTarget[];
+  displayX?: (x: number) => number;
+  modelX?: (distance: number) => number;
   /** Header content shown whenever this pane does not own the spline selection. */
   fallback?: ReactNode;
 }) {
@@ -161,8 +165,12 @@ export function SelectedPointEditor({
             ? activeKnot.tangentToNext
             : activeKnot.end;
       const stepCm = parse(String(pointEditStep(units)), units);
+      const longitudinal =
+        active.target.kind === 'crossSection' ? activePoint.x : displayX(activePoint.x);
+      const nextLongitudinal =
+        longitudinal + (key === 'ArrowLeft' ? -stepCm : key === 'ArrowRight' ? stepCm : 0);
       const next = {
-        x: activePoint.x + (key === 'ArrowLeft' ? -stepCm : key === 'ArrowRight' ? stepCm : 0),
+        x: active.target.kind === 'crossSection' ? nextLongitudinal : modelX(nextLongitudinal),
         y: activePoint.y + (key === 'ArrowDown' ? -stepCm : key === 'ArrowUp' ? stepCm : 0),
       };
 
@@ -170,7 +178,7 @@ export function SelectedPointEditor({
       else state.moveTangent(active.target, active.index, activeKind, next);
       return true;
     },
-    [store, targets, units],
+    [displayX, modelX, store, targets, units],
   );
 
   useEffect(() => {
@@ -215,6 +223,7 @@ export function SelectedPointEditor({
     else store.getState().moveTangent(selection.target, selection.index, kind, { x, y });
   };
   const [splineXLabel, splineYLabel] = coordinateLabels(selection.target);
+  const longitudinal = selection.target.kind !== 'crossSection';
 
   return (
     // min-w-0 + horizontal scroll (never wrap): this sits in a fixed-height pane
@@ -226,9 +235,9 @@ export function SelectedPointEditor({
       <span className="shrink-0 text-xs font-medium text-foreground">{label}</span>
       <HeaderCoordInput
         label={splineXLabel}
-        valueCm={point.x}
+        valueCm={longitudinal ? displayX(point.x) : point.x}
         units={units}
-        onCommit={(x) => commit(x, point.y)}
+        onCommit={(x) => commit(longitudinal ? modelX(x) : x, point.y)}
         onDismiss={() => store.getState().select(null)}
         onNudge={nudge}
       />

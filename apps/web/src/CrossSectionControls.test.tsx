@@ -47,6 +47,24 @@ describe('the cross-section cluster with a mouse', () => {
     }
     expect(screen.queryByRole('button', { name: 'More cross-section actions' })).toBeNull();
   });
+
+  it('converts editable station measurements without moving the stored station', () => {
+    const onMoveTo = vi.fn();
+    render(
+      <CrossSectionControls
+        {...props({
+          onMoveTo,
+          toDisplayPosition: (x) => x + 10,
+          toModelPosition: (distance) => distance - 10,
+        })}
+      />,
+    );
+    const input = screen.getByLabelText('Selected slice position');
+    expect(input).toHaveProperty('value', '100.00');
+    fireEvent.change(input, { target: { value: '120' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onMoveTo).toHaveBeenCalledWith(110);
+  });
 });
 
 describe('the cross-section cluster on a coarse pointer', () => {

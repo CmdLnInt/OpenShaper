@@ -386,6 +386,23 @@ export const splineLengthToX = (s: Spline, x: number): number => {
   return len + curveLength(s.coeffs[i]!, T_ZERO, tForX(s.coeffs[i]!, x));
 };
 
+/** Station x at cumulative arc distance `length` from the spline start. */
+export const xAtSplineLength = (s: Spline, length: number): number => {
+  const first = s.knots[0]!.end.x;
+  const last = s.knots[s.knots.length - 1]!.end.x;
+  const total = splineLength(s);
+  if (length <= 0) return first;
+  if (length >= total) return last;
+  let lo = first;
+  let hi = last;
+  for (let i = 0; i < 48; i++) {
+    const mid = (lo + hi) / 2;
+    if (splineLengthToX(s, mid) < length) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+};
+
 export const maxX = (s: Spline): number => {
   let m = -1e5;
   for (const k of s.coeffs) m = Math.max(m, curveMaxX(k));

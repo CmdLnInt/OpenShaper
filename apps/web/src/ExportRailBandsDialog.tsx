@@ -63,6 +63,8 @@ export const manualSpecOf = (d: RailBandsSettings): RailManualSpec => ({
 export interface ExportRailBandsDialogProps {
   board: BezierBoard;
   units: LengthUnit;
+  /** Convert an absolute board-X coordinate for display. */
+  displayX?: (x: number) => number;
   /** Current persisted settings, used to pre-populate the form. */
   settings: RailBandsSettings;
   /** Called with the chosen settings to persist + run the export. */
@@ -73,6 +75,7 @@ export interface ExportRailBandsDialogProps {
 export function ExportRailBandsDialog({
   board,
   units,
+  displayX = (x) => x,
   settings,
   onExport,
   onClose,
@@ -174,10 +177,10 @@ export function ExportRailBandsDialog({
   // What the target actually worked out to. The two sides of the widepoint are fitted
   // separately, so report the mean gap rather than implying a single exact interval.
   const actualSpacing = useMemo(() => {
-    const xs = plan.stations.map((s) => s.position);
+    const xs = plan.stations.map((s) => displayX(s.position));
     if (xs.length < 2) return null;
     return (xs[xs.length - 1]! - xs[0]!) / (xs.length - 1);
-  }, [plan]);
+  }, [displayX, plan]);
 
   const notes = useMemo(() => [...new Set(plan.warnings.map((w) => w.message))], [plan]);
 
@@ -448,11 +451,11 @@ export function ExportRailBandsDialog({
               ) : (
                 <>
                   {plan.stations.length} station{plan.stations.length === 1 ? '' : 's'} from{' '}
-                  {fmtLen(plan.stations[0]!.position, units)} to{' '}
-                  {fmtLen(plan.stations[plan.stations.length - 1]!.position, units)}
+                  {fmtLen(displayX(plan.stations[0]!.position), units)} to{' '}
+                  {fmtLen(displayX(plan.stations[plan.stations.length - 1]!.position), units)}
                   {actualSpacing !== null && <> , about {fmtLen(actualSpacing, units)} apart</>}.
                   Spacing is adjusted to land on both ends and on the widepoint at{' '}
-                  {fmtLen(plan.widePoint, units)}.
+                  {fmtLen(displayX(plan.widePoint), units)}.
                 </>
               )}
             </p>

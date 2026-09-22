@@ -2,6 +2,9 @@ import { boardDiagramSvg, specSheetHtml, type SpecSection } from '@openshaper/ex
 import {
   FIN_SETUP_LABELS,
   FIN_SYSTEM_LABELS,
+  getRockerAtPos,
+  getThicknessAtPos,
+  getWidthAtPos,
   resolveFins,
   type BezierBoard,
   type FinConfig,
@@ -10,6 +13,12 @@ import {
 import type { BoardSpecs } from '@openshaper/store';
 import type { BoardMeta } from './file-io';
 import { fmtDimsHeadline, fmtLen, fmtVol, type LengthUnit } from './format';
+import {
+  longitudinalDistance,
+  longitudinalLength,
+  longitudinalX,
+  type LongitudinalMeasure,
+} from './longitudinal-measure';
 
 /** 4 ft in cm — below this, the @24" rocker readouts are omitted (matches the sidebar). */
 const MIN_LEN_FOR_24 = 121.92;
@@ -21,8 +30,17 @@ export const specSheetHtmlFor = (
   meta: BoardMeta,
   units: LengthUnit,
   fins?: FinConfig,
+  longitudinalMeasure: LongitudinalMeasure = 'rocker',
 ): string => {
   const L = (cm: number): string => fmtLen(cm, units);
+  const LX = (x: number): string => L(longitudinalDistance(board, x, longitudinalMeasure));
+  const measuredLength = longitudinalLength(board, longitudinalMeasure);
+  const at = (distance: number) => longitudinalX(board, distance, longitudinalMeasure);
+  const tail1 = at(30.48);
+  const tail2 = at(60.96);
+  const nose1 = at(Math.max(0, measuredLength - 30.48));
+  const nose2 = at(Math.max(0, measuredLength - 60.96));
+  const center = at(measuredLength / 2);
   const hasFins = !!fins && fins.setup !== 'none';
   const finText = hasFins
     ? `${FIN_SETUP_LABELS[fins.setup]} · ${FIN_SYSTEM_LABELS[fins.system]}`
@@ -36,7 +54,7 @@ export const specSheetHtmlFor = (
     ? resolveFins(board, fins).map((fin) => {
         const angles = fin.side === 0 ? '' : ` · toe ${fin.toe}° · cant ${fin.cant}°`;
         const summary =
-          `${L(fin.spec.trailingFromTail)} from tail · base ${L(fin.spec.base)} · ` +
+          `${LX(fin.spec.trailingFromTail)} from tail · base ${L(fin.spec.base)} · ` +
           `depth ${L(fin.spec.depth)}${angles} · ${fin.foil}`;
         return [sideName(fin.side), summary];
       })
@@ -46,12 +64,12 @@ export const specSheetHtmlFor = (
     {
       title: 'Nose',
       rows: [
-        ['Width @ 12"', L(specs.noseWidth)],
-        ['Thickness @ 12"', L(specs.noseThickness)],
+        ['Width @ 12"', L(getWidthAtPos(board, nose1))],
+        ['Thickness @ 12"', L(getThicknessAtPos(board, nose1))],
         ['Rocker', L(specs.noseRocker)],
-        ['Rocker @ 12"', L(specs.noseRocker1)],
-        ...(specs.length >= MIN_LEN_FOR_24
-          ? ([['Rocker @ 24"', L(specs.noseRocker2)]] as [string, string][])
+        ['Rocker @ 12"', L(getRockerAtPos(board, nose1))],
+        ...(measuredLength >= MIN_LEN_FOR_24
+          ? ([['Rocker @ 24"', L(getRockerAtPos(board, nose2))]] as [string, string][])
           : []),
       ],
     },
@@ -59,32 +77,35 @@ export const specSheetHtmlFor = (
       title: 'Center',
       rows: [
         ['Width', L(specs.maxWidth)],
-        ['Wide point', L(specs.maxWidthPos)],
-        ['Center width', L(specs.centerWidth)],
-        ['Thickness', L(specs.thickness)],
+        ['Wide point', LX(specs.maxWidthPos)],
+        ['Center width', L(getWidthAtPos(board, center))],
+        ['Thickness', L(getThicknessAtPos(board, center))],
         ['Max thickness', L(specs.maxThickness)],
       ],
     },
     {
       title: 'Tail',
       rows: [
-        ['Width @ 12"', L(specs.tailWidth)],
-        ['Thickness @ 12"', L(specs.tailThickness)],
+        ['Width @ 12"', L(getWidthAtPos(board, tail1))],
+        ['Thickness @ 12"', L(getThicknessAtPos(board, tail1))],
         ['Rocker', L(specs.tailRocker)],
-        ['Rocker @ 12"', L(specs.tailRocker1)],
-        ...(specs.length >= MIN_LEN_FOR_24
-          ? ([['Rocker @ 24"', L(specs.tailRocker2)]] as [string, string][])
+        ['Rocker @ 12"', L(getRockerAtPos(board, tail1))],
+        ...(measuredLength >= MIN_LEN_FOR_24
+          ? ([['Rocker @ 24"', L(getRockerAtPos(board, tail2))]] as [string, string][])
           : []),
       ],
     },
     {
       title: 'Overall',
       rows: [
-        ['Length', L(specs.length)],
-        ['Length o/curve', L(specs.lengthOverCurve)],
+        ['Length', L(measuredLength)],
+        [
+          longitudinalMeasure === 'rocker' ? 'Projected length' : 'Length o/curve',
+          L(longitudinalMeasure === 'rocker' ? specs.length : specs.lengthOverCurve),
+        ],
         ['Max rocker', L(specs.maxRocker)],
         ['Volume', fmtVol(specs.volume)],
-        ['Center of mass', L(specs.centerOfMass)],
+        ['Center of mass', LX(specs.centerOfMass)],
         ...(hasFins ? ([['Fins', finText]] as [string, string][]) : []),
       ],
     },
@@ -94,7 +115,7 @@ export const specSheetHtmlFor = (
     title: meta.model || 'Surfboard',
     designer: meta.designer,
     date: new Date().toISOString().slice(0, 10),
-    headline: `${fmtDimsHeadline(specs.length, specs.maxWidth, specs.thickness, units)} · ${fmtVol(specs.volume)}`,
+    headline: `${fmtDimsHeadline(measuredLength, specs.maxWidth, getThicknessAtPos(board, center), units)} · ${fmtVol(specs.volume)}`,
     info: [
       ...(meta.surfer ? ([['Surfer', meta.surfer]] as [string, string][]) : []),
       ...(hasFins ? ([['Fins', finText]] as [string, string][]) : []),

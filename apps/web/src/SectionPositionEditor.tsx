@@ -6,16 +6,21 @@ import { cmToUnitNumber, lengthEditStep, parseLen, unitSuffix, type LengthUnit }
 export function SectionPositionEditor({
   valueCm,
   units,
+  toDisplayPosition = (value) => value,
+  toModelPosition = (value) => value,
   onCommit,
   onDismiss,
 }: {
   valueCm: number;
   units: LengthUnit;
+  toDisplayPosition?: (cm: number) => number;
+  toModelPosition?: (cm: number) => number;
   onCommit: (cm: number) => void;
   /** Optional Escape handler. Omitted where the editor is always on screen. */
   onDismiss?: () => void;
 }) {
-  const shown = cmToUnitNumber(valueCm, units).toFixed(2);
+  const displayValue = toDisplayPosition(valueCm);
+  const shown = cmToUnitNumber(displayValue, units).toFixed(2);
   const [text, setText] = useState(shown);
   const textRef = useRef(shown);
   const dirty = useRef(false);
@@ -36,17 +41,17 @@ export function SectionPositionEditor({
     if (!dirty.current) return;
     const position = parseLen(textRef.current, units);
     dirty.current = false;
-    if (Number.isFinite(position)) onCommit(position);
+    if (Number.isFinite(position)) onCommit(toModelPosition(position));
     else updateText(shown);
   };
 
   const step = (direction: -1 | 1) => {
     const typedCm = parseLen(textRef.current, units);
-    const baseCm = Number.isFinite(typedCm) ? typedCm : valueCm;
+    const baseCm = Number.isFinite(typedCm) ? typedCm : displayValue;
     const next = (cmToUnitNumber(baseCm, units) + direction * stepAmount).toFixed(2);
     updateText(next);
     dirty.current = false;
-    onCommit(parseLen(next, units));
+    onCommit(toModelPosition(parseLen(next, units)));
   };
 
   return (

@@ -6,6 +6,7 @@ import {
   splineLengthToX,
   tangentAt,
   valueAt,
+  xAtSplineLength,
 } from './bezier-spline';
 import { board } from './board';
 import { knotFromArray } from './knot';
@@ -43,6 +44,12 @@ describe('splineLengthToX', () => {
     const k = 0.1;
     const sloped = boxBoard({ length: 100, rockerSlope: k });
     expect(splineLengthToX(sloped.bottom, 40)).toBeCloseTo(40 * Math.hypot(1, k), 3);
+  });
+
+  it('round-trips an x station through rocker distance', () => {
+    const b = curvyBoard();
+    for (const x of [0, 12.5, 40, 78.25, 100])
+      expect(xAtSplineLength(b.bottom, splineLengthToX(b.bottom, x))).toBeCloseTo(x, 8);
   });
 });
 

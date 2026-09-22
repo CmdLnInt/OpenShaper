@@ -59,6 +59,28 @@ describe('<App /> smoke', () => {
     expect(units.className).not.toContain('bg-transparent');
   });
 
+  it('defaults longitudinal measurements to the bottom rocker and switches without moving geometry', async () => {
+    render(<App />);
+    await screen.findAllByText(/[\d.]+ liters/);
+    const board = boardStore.getState().board!;
+    const sectionPositions = board.crossSections.map((section) => section.position);
+    const headline = screen.getByRole('button', { name: 'Copy dimensions' });
+    const rocker = headline.textContent;
+
+    expect(screen.getByLabelText('Longitudinal measurements')).toHaveProperty('value', 'rocker');
+
+    fireEvent.change(screen.getByLabelText('Longitudinal measurements'), {
+      target: { value: 'projected' },
+    });
+
+    expect(headline.textContent).not.toBe(rocker);
+    expect(boardStore.getState().board).toBe(board);
+    expect(boardStore.getState().board!.crossSections.map((section) => section.position)).toEqual(
+      sectionPositions,
+    );
+    expect(localStorage.getItem('bs.longitudinalMeasure')).toBe('projected');
+  });
+
   it('Ctrl+K opens the command palette over the menu actions', async () => {
     render(<App />);
 

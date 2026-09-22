@@ -48,6 +48,13 @@ export default function DocsSpecs() {
           millimetres, centimetres, inches, or feet and inches with fractions. Nothing is shown in a
           fixed unit, and exports follow the same selection.
         </p>
+        <p>
+          The selector beside it chooses how longitudinal positions are measured.{' '}
+          <strong>X axis</strong> uses the straight tail-to-nose coordinate; <strong>Rocker</strong>{' '}
+          measures along the bottom curve, like laying a flexible tape on the stringer. Switching
+          modes only converts the displayed and editable numbers — sections, fins and control points
+          stay in place.
+        </p>
         <p>Volume is the deliberate exception: always litres.</p>
       </Section>
 
@@ -63,9 +70,9 @@ export default function DocsSpecs() {
         <Terms>
           <Term name="Grid & guides">Scale reference and station lines.</Term>
           <Term name="Curvature comb">
-            Quills drawn normal to a curve, scaled by curvature. A fair curve gives a smooth comb;
-            a kink shows as a spike or a sudden flip. This is the fastest way to find a flat spot
-            in a rail that looks fine to the eye.
+            Quills drawn normal to a curve, scaled by curvature. A fair curve gives a smooth comb; a
+            kink shows as a spike or a sudden flip. This is the fastest way to find a flat spot in a
+            rail that looks fine to the eye.
           </Term>
           <Term name="Volume distribution">
             How volume is spread along the length — where the board carries its float.

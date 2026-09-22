@@ -27,6 +27,8 @@ export interface CrossSectionControlsProps {
   /** Length position of the current station, or null before a board loads. */
   positionCm: number | null;
   units: LengthUnit;
+  toDisplayPosition?: (cm: number) => number;
+  toModelPosition?: (cm: number) => number;
   onMoveTo: (cm: number) => void;
 }
 
@@ -64,6 +66,8 @@ export function CrossSectionControls({
   canPaste,
   positionCm,
   units,
+  toDisplayPosition,
+  toModelPosition,
   onMoveTo,
 }: CrossSectionControlsProps) {
   const coarse = useIsCoarsePointer();
@@ -122,7 +126,13 @@ export function CrossSectionControls({
       <span className="mx-0.5 h-5 w-px bg-border" />
       {positionCm !== null && (
         <>
-          <SectionPositionEditor valueCm={positionCm} units={units} onCommit={onMoveTo} />
+          <SectionPositionEditor
+            valueCm={positionCm}
+            units={units}
+            toDisplayPosition={toDisplayPosition}
+            toModelPosition={toModelPosition}
+            onCommit={onMoveTo}
+          />
           <span className="mx-0.5 h-5 w-px bg-border" />
         </>
       )}

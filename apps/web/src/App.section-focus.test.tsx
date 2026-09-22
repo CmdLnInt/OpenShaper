@@ -41,6 +41,7 @@ const showOnly = (key: string) => fireEvent.keyDown(window, { key });
 describe('cross-section station controls', () => {
   beforeEach(() => {
     const values = new Map<string, string>();
+    values.set('bs.longitudinalMeasure', 'projected');
     vi.stubGlobal('localStorage', {
       clear: () => values.clear(),
       getItem: (key: string) => values.get(key) ?? null,

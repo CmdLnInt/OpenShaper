@@ -3,6 +3,7 @@ import { decodeShareFragment, parseBrd, readBoardJson, writeBoardJson } from '@o
 import {
   loftCrossSection,
   getLength,
+  getThicknessAtPos,
   resolveFins,
   type BezierBoard,
   type Spline,
@@ -108,6 +109,7 @@ import {
   faceSizeFor,
   FALLBACK_VIEW,
   isViewAvailable,
+  LongitudinalMeasureSelect,
   ThreeDControls,
   UnitSelect,
   ViewPaneHeader,
@@ -115,6 +117,13 @@ import {
   type View,
   type View3DSettings,
 } from './view-toolkit';
+import {
+  longitudinalDistance,
+  longitudinalLength,
+  longitudinalLengthScale,
+  longitudinalX,
+  type LongitudinalMeasure,
+} from './longitudinal-measure';
 import { DEFAULT_VIEW_3D } from './view3d-settings';
 import { estimateWeight, type FoamType, type GlassSchedule } from './weights';
 
@@ -394,9 +403,28 @@ function AppShell() {
     () => localStorage.getItem('bs.lengthUnit') ?? DEFAULT_LENGTH_UNIT.key,
   );
   const units = lengthUnitByKey(unitKey);
+  const [longitudinalMeasure, setLongitudinalMeasure] = useState<LongitudinalMeasure>(() =>
+    localStorage.getItem('bs.longitudinalMeasure') === 'projected' ? 'projected' : 'rocker',
+  );
   useEffect(() => {
     localStorage.setItem('bs.lengthUnit', unitKey);
   }, [unitKey]);
+  useEffect(() => {
+    localStorage.setItem('bs.longitudinalMeasure', longitudinalMeasure);
+  }, [longitudinalMeasure]);
+  const displayX = useCallback(
+    (x: number) => (board ? longitudinalDistance(board, x, longitudinalMeasure) : x),
+    [board, longitudinalMeasure],
+  );
+  const modelX = useCallback(
+    (distance: number) => (board ? longitudinalX(board, distance, longitudinalMeasure) : distance),
+    [board, longitudinalMeasure],
+  );
+  const measuredBoardLength = board ? longitudinalLength(board, longitudinalMeasure) : null;
+  const measuredThickness =
+    board && measuredBoardLength != null
+      ? getThicknessAtPos(board, modelX(measuredBoardLength / 2))
+      : null;
   const [view3d, setView3d] = useState<View3DSettings>(
     bootViewState.current.view3d ?? DEFAULT_VIEW_3D,
   );
@@ -569,12 +597,17 @@ function AppShell() {
       const v = parseLen(t, units);
       return v > 0 ? v / cur : 1;
     };
+    const lengthTarget = resize.l.trim() ? parseLen(resize.l, units) : 0;
+    const lengthFactor =
+      board && lengthTarget > 0
+        ? longitudinalLengthScale(board, lengthTarget, longitudinalMeasure)
+        : 1;
     boardStore
       .getState()
       .scaleBoard(
-        factor(resize.l, specs.length),
+        lengthFactor,
         factor(resize.w, specs.maxWidth),
-        factor(resize.t, specs.thickness),
+        factor(resize.t, measuredThickness ?? specs.thickness),
       );
     setResize({ l: '', w: '', t: '' });
   };
@@ -699,7 +732,11 @@ function AppShell() {
     // Prefer the worker's specs, but fall back to a synchronous compute so the sheet
     // never depends on the worker having responded yet (selectSpecs is memoized).
     const sheetSpecs = specs ?? selectSpecs(board);
-    if (!openHtmlInNewTab(specSheetHtmlFor(board, sheetSpecs, meta, units, board.fins))) {
+    if (
+      !openHtmlInNewTab(
+        specSheetHtmlFor(board, sheetSpecs, meta, units, board.fins, longitudinalMeasure),
+      )
+    ) {
       showToast('Pop-up blocked — allow pop-ups to open the spec sheet.');
     }
   };
@@ -922,6 +959,8 @@ function AppShell() {
       canPaste={!!csClipboard}
       positionCm={board?.crossSections[clampedCs]?.position ?? null}
       units={units}
+      toDisplayPosition={displayX}
+      toModelPosition={modelX}
       onMoveTo={(position) => moveSection(clampedCs, position)}
     />
   );
@@ -1224,6 +1263,8 @@ function AppShell() {
             viewCommand={viewCmd}
             initialView={pendingViews2d.current.outline}
             onViewChange={reportPaneView('outline')}
+            longitudinalPosition={displayX}
+            modelLongitudinalPosition={modelX}
           />,
           <EditorPane
             key="crossSection"
@@ -1240,6 +1281,8 @@ function AppShell() {
             settings={settings}
             initialView={pendingViews2d.current.crossSection}
             onViewChange={reportPaneView('crossSection')}
+            longitudinalPosition={displayX}
+            modelLongitudinalPosition={modelX}
           />,
           <EditorPane
             key="rocker"
@@ -1262,6 +1305,8 @@ function AppShell() {
             viewCommand={viewCmd}
             initialView={pendingViews2d.current.rocker}
             onViewChange={reportPaneView('rocker')}
+            longitudinalPosition={displayX}
+            modelLongitudinalPosition={modelX}
           />,
           <Panel key="3d" className="flex min-h-0 flex-col">
             <ViewPaneHeader className="flex items-center justify-between gap-2">
@@ -1310,6 +1355,13 @@ function AppShell() {
       ghost={!!ghost}
       ghostSpecs={ghostSpecs}
       onUnitChange={isPhone ? setUnitKey : undefined}
+      longitudinalMeasure={longitudinalMeasure}
+      onLongitudinalMeasureChange={isPhone ? setLongitudinalMeasure : undefined}
+      displayX={displayX}
+      modelX={modelX}
+      board={board}
+      displayLength={measuredBoardLength}
+      ghostDisplayLength={ghost ? longitudinalLength(ghost, longitudinalMeasure) : null}
     />
   );
 
@@ -1317,7 +1369,12 @@ function AppShell() {
   const sheetPeek = specs ? (
     <div className="flex items-center justify-between gap-3 text-sm">
       <span className="truncate font-mono text-[13px] tabular-nums text-foreground">
-        {fmtDimsHeadline(specs.length, specs.maxWidth, specs.thickness, units)}
+        {fmtDimsHeadline(
+          measuredBoardLength ?? specs.length,
+          specs.maxWidth,
+          measuredThickness ?? specs.thickness,
+          units,
+        )}
       </span>
       <span className="shrink-0 font-mono text-[13px] tabular-nums text-muted-foreground">
         {fmtVol(specs.volume)}
@@ -1429,7 +1486,15 @@ function AppShell() {
           {/* On a phone this row has no room for it — it moves into the sheet,
               where the current unit stays visible next to the dimensions it
               formats. See `UnitSelect`. */}
-          {!isPhone && <UnitSelect value={unitKey} onChange={setUnitKey} />}
+          {!isPhone && (
+            <>
+              <LongitudinalMeasureSelect
+                value={longitudinalMeasure}
+                onChange={setLongitudinalMeasure}
+              />
+              <UnitSelect value={unitKey} onChange={setUnitKey} />
+            </>
+          )}
           {/* Below lg the sidebar lives in a bottom sheet; this opens it. */}
           <Button
             size="sm"
@@ -1551,6 +1616,8 @@ function AppShell() {
               settings={settings}
               initialView={pendingViews2d.current[view]}
               onViewChange={reportPaneView(view)}
+              longitudinalPosition={displayX}
+              modelLongitudinalPosition={modelX}
             />
           )}
         </div>
@@ -1664,6 +1731,7 @@ function AppShell() {
         <ExportRailBandsDialog
           board={board as BezierBoard}
           units={units}
+          displayX={displayX}
           settings={railBandsSettings}
           onExport={(s) => {
             saveRailBands(s);
@@ -1698,7 +1766,11 @@ function AppShell() {
           units={units}
           specs={
             specs
-              ? { length: specs.length, maxWidth: specs.maxWidth, thickness: specs.thickness }
+              ? {
+                  length: measuredBoardLength ?? specs.length,
+                  maxWidth: specs.maxWidth,
+                  thickness: measuredThickness ?? specs.thickness,
+                }
               : null
           }
           onClose={() => setTemplateKind(null)}
