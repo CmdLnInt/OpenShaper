@@ -9,6 +9,15 @@
  * not as the pixel-anchored Viewport, so restoring into a different window or
  * pane size re-centers correctly.
  */
+import {
+  DEFAULT_SIDEBAR_STATE,
+  isSectionId,
+  isSpecGroupId,
+  isTabId,
+  sectionIds,
+  specGroupIds,
+  type SidebarState,
+} from './sidebar-sections';
 import { SPLIT_PANE_KINDS, type EditorKind, type SplitPaneKind, type View } from './view-toolkit';
 import {
   ANALYSIS_3D,
@@ -22,7 +31,14 @@ import {
 
 const STORAGE_KEY = 'bs.viewState';
 
-/** Bump when the ViewState shape changes in a breaking way. */
+/**
+ * Bump when the ViewState shape changes in a breaking way.
+ *
+ * `sidebar` did not warrant one: it is optional and additive, so an older blob
+ * restores its panes and camera exactly as before and simply picks up the default
+ * sidebar. Bumping would have thrown away every saved framing and camera pose on
+ * upgrade to buy nothing.
+ */
 export const VIEW_STATE_VERSION = 1;
 
 /** A 2D pane's framing: world point under the canvas center + zoom (px/cm). */
@@ -59,6 +75,12 @@ export interface ViewState {
    * than the default one.
    */
   split?: SplitPanes;
+  /**
+   * Sidebar shape: the active and pinned tabs, whether the panel is folded away, and
+   * which sections and spec bands are expanded (see `sidebar-sections.ts`). Absent on
+   * blobs written before the sidebar grew tabs.
+   */
+  sidebar?: SidebarState;
 }
 
 /**
@@ -72,6 +94,7 @@ export const DEFAULT_VIEW_STATE: ViewState = {
   version: VIEW_STATE_VERSION,
   view: 'quad',
   views2d: {},
+  sidebar: DEFAULT_SIDEBAR_STATE,
 };
 
 const VIEWS: readonly View[] = ['quad', 'split', 'outline', 'rocker', 'crossSection', '3d'];
@@ -139,6 +162,44 @@ const sanitizeView3D = (v: unknown): View3DSettings | undefined => {
 };
 
 /**
+ * Sidebar shape, with unknown section ids dropped rather than trusted.
+ *
+ * Ids are the join between this blob and `SIDEBAR_SECTIONS`; a section removed in a
+ * later release must not be able to resurrect itself from an old blob, and an id that
+ * was never ours must not reach the renderer. Filtering also re-imposes registry order,
+ * so a hand-edited blob cannot reorder the sidebar.
+ */
+const sanitizeSidebar = (v: unknown): SidebarState | undefined => {
+  if (!v || typeof v !== 'object') return undefined;
+  const o = v as Record<string, unknown>;
+  const ids = (raw: unknown) => {
+    if (!Array.isArray(raw)) return undefined;
+    const kept = new Set(raw.filter(isSectionId));
+    return sectionIds().filter((id) => kept.has(id));
+  };
+  const open = ids(o.open);
+  const touched = ids(o.touched);
+  // A blob with neither list is not a sidebar, whatever else it holds.
+  if (!open && !touched) return undefined;
+  const bands = Array.isArray(o.specGroups)
+    ? (() => {
+        const kept = new Set(o.specGroups.filter(isSpecGroupId));
+        return specGroupIds().filter((id) => kept.has(id));
+      })()
+    : undefined;
+  return {
+    collapsed: bool(o.collapsed, DEFAULT_SIDEBAR_STATE.collapsed),
+    // A tab that no longer exists must not be selectable: it would render an empty
+    // panel beside a strip with nothing lit.
+    activeTab: isTabId(o.activeTab) ? o.activeTab : DEFAULT_SIDEBAR_STATE.activeTab,
+    pinnedTab: isTabId(o.pinnedTab) ? o.pinnedTab : null,
+    open: open ?? DEFAULT_SIDEBAR_STATE.open,
+    touched: touched ?? DEFAULT_SIDEBAR_STATE.touched,
+    specGroups: bands ?? DEFAULT_SIDEBAR_STATE.specGroups,
+  };
+};
+
+/**
  * Read the persisted view state. Returns defaults when the key is absent, the
  * JSON is malformed, or the schema version doesn't match; individually invalid
  * fields are dropped rather than rejecting the whole blob.
@@ -165,6 +226,7 @@ export function loadViewState(): ViewState {
       ...(camera3d ? { camera3d } : {}),
       ...(view3d ? { view3d } : {}),
       ...(split ? { split } : {}),
+      sidebar: sanitizeSidebar(parsed.sidebar) ?? DEFAULT_SIDEBAR_STATE,
     };
   } catch {
     return DEFAULT_VIEW_STATE;

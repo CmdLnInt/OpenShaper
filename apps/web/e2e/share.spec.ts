@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { editorReady } from './helpers';
+import { editorReady, openSection } from './helpers';
 
 /**
  * The full share round-trip, in a real browser: make a link from a modified
@@ -37,9 +37,15 @@ test('a modified board round-trips through a link into a clean browser', async (
   await editorReady(page);
 
   // Modify the board so what arrives cannot be mistaken for the bundled sample.
-  // The sidebar is visible at this viewport; the sheet toggle is lg:hidden.
+  // The sidebar is visible at this viewport, and Resize is one of its collapsed
+  // sections — open it the way a user would before reaching for the field.
+  await openSection(page, 'Resize');
   await page.getByLabel('Length').first().fill('2100');
   await page.getByRole('button', { name: 'Apply' }).click();
+  // Resize lives in the Shape tab and the headline in Specs, so checking the result is
+  // a tab away — the strip's own readout is what keeps the number visible in between.
+  await expect(page.getByRole('complementary', { name: 'Board panels' })).toContainText('2100');
+  await page.getByRole('tab', { name: 'Specs' }).click();
   await expect(headlineBox(page)).toContainText('2100');
 
   // Name it — the dialog offers the fields when the board has none.
@@ -62,6 +68,7 @@ test('a modified board round-trips through a link into a clean browser', async (
   await expect.poll(() => headline(theirPage), { timeout: 10_000 }).toBe(sent);
 
   // Same Board Info, in the sidebar's own fields.
+  await openSection(theirPage, 'Board info');
   await expect(theirPage.getByLabel(/^model$/i)).toHaveValue('Round Trip');
   await expect(theirPage.getByLabel(/^designer$/i)).toHaveValue('E2E');
 
@@ -131,6 +138,8 @@ const namingSurvivesTyping = async (page: Page, openPanels: boolean) => {
 
   // Set the designer first — that is what makes the next keystroke fatal.
   if (openPanels) await page.getByRole('button', { name: 'Show board panels' }).click();
+  // Board info is a collapsed section: reach the field the way a user does.
+  await openSection(page, 'Board info');
   await page.getByLabel(/^designer$/i).fill('Jared');
   if (openPanels) await page.getByRole('button', { name: 'Hide board panels' }).click();
 

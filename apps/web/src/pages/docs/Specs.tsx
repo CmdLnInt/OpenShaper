@@ -26,6 +26,17 @@ export default function DocsSpecs() {
           These are computed in a background worker, so dragging a control point never stutters
           while the numbers catch up.
         </p>
+        <p>
+          The readout is written in four bands — Nose, Center, Tail and Overall — and each one
+          collapses. Overall starts open; the other three start shut, with the number that band is
+          usually consulted for on its header, so the whole readout fits a laptop screen without
+          scrolling. Open as many as you want; the choice is remembered.
+        </p>
+        <p>
+          Specs has its own tab, so it is always one click away, and the headline dimensions and
+          volume stay on the tab strip even when the panel is folded away — the numbers you check
+          most are never more than a glance from wherever you are working.
+        </p>
       </Section>
 
       <Section id="volume" title="Volume">
@@ -63,9 +74,9 @@ export default function DocsSpecs() {
         <Terms>
           <Term name="Grid & guides">Scale reference and station lines.</Term>
           <Term name="Curvature comb">
-            Quills drawn normal to a curve, scaled by curvature. A fair curve gives a smooth comb;
-            a kink shows as a spike or a sudden flip. This is the fastest way to find a flat spot
-            in a rail that looks fine to the eye.
+            Quills drawn normal to a curve, scaled by curvature. A fair curve gives a smooth comb; a
+            kink shows as a spike or a sudden flip. This is the fastest way to find a flat spot in a
+            rail that looks fine to the eye.
           </Term>
           <Term name="Volume distribution">
             How volume is spread along the length — where the board carries its float.

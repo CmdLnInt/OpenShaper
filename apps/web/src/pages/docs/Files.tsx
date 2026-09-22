@@ -73,7 +73,9 @@ export default function DocsFiles() {
             Trace images and any other image data, the comparison ghost board, undo history, your
             recent boards, and your own settings — units, camera, overlays and appearance. Opening a
             shared board also hides your own trace images so they do not sit under someone else's
-            outline; they are hidden, not deleted, and the Trace image panel turns them back on.
+            outline; they are hidden, not deleted, and the Trace image section turns them back on.
+            That section opens by itself in the outline and rocker views, and carries a dot on its
+            header whenever an image is loaded.
           </Term>
         </Terms>
         <p>
