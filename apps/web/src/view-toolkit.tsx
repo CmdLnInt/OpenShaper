@@ -45,7 +45,31 @@ import {
 } from './view3d-settings';
 
 export type EditorKind = 'outline' | 'rocker' | 'crossSection';
-export type View = 'quad' | EditorKind | '3d';
+/** What a single pane can show — one of the 2D editors or the 3D surface. */
+export type SplitPaneKind = EditorKind | '3d';
+export type View = 'quad' | 'split' | EditorKind | '3d';
+
+/** The panes a split half can be pointed at, in picker order. */
+export const SPLIT_PANE_KINDS: readonly SplitPaneKind[] = [
+  'outline',
+  'rocker',
+  'crossSection',
+  '3d',
+];
+
+/** Short pane names, for the split pickers. */
+export const PANE_LABELS: Record<SplitPaneKind, string> = {
+  outline: 'Outline',
+  rocker: 'Rocker',
+  crossSection: 'Cross-section',
+  '3d': '3D',
+};
+
+/** The layout tier, as the two media-query answers that gate a view. */
+export interface ViewTier {
+  isPhone: boolean;
+  isDesktop: boolean;
+}
 
 /**
  * Whether a view is offered at the current layout tier.
@@ -55,11 +79,20 @@ export type View = 'quad' | EditorKind | '3d';
  * `touch-action: none` the column can only be scrolled from the gaps between
  * panes and the pane headers — so most of it is unreachable by the gesture a
  * phone user would naturally try. Phones get the single views instead.
+ *
+ * Split halves the viewport height between two full-width panes, so it needs a
+ * height budget the compact tiers do not have: below `lg` each half would be
+ * shorter than the fixed pane height the stacked quad column already settled on,
+ * with a pane header eating into it twice. It is a desktop layout, and the tab
+ * and its number key are both withheld everywhere else.
  */
-export const isViewAvailable = (view: View, isPhone: boolean): boolean =>
-  !(isPhone && view === 'quad');
+export const isViewAvailable = (view: View, { isPhone, isDesktop }: ViewTier): boolean => {
+  if (view === 'quad') return !isPhone;
+  if (view === 'split') return isDesktop;
+  return true;
+};
 
-/** Where a phone lands when the view it would otherwise restore is unavailable. */
+/** Where a tier lands when the view it would otherwise restore is unavailable. */
 export const FALLBACK_VIEW: View = 'outline';
 
 // Re-export 3D settings so existing importers from view-toolkit keep working
@@ -108,6 +141,45 @@ export function ViewToggleTitle({
     >
       {children}
     </PanelTitle>
+  );
+}
+
+/**
+ * The pane picker that stands in for a split half's title.
+ *
+ * Split view is two panes and two choices, so the choice lives where the pane
+ * name would otherwise be: the heading *is* the control, and there is no second
+ * place to look for it. It replaces `ViewToggleTitle` rather than joining the
+ * header actions, because those are the fallback slot of `SelectedPointEditor`
+ * and vanish the moment a control point is selected — which is exactly when
+ * someone is most likely to want the other half of the board on screen.
+ */
+export function SplitPaneSelect({
+  slot,
+  value,
+  onChange,
+}: {
+  slot: 'Top' | 'Bottom';
+  value: SplitPaneKind;
+  onChange: (kind: SplitPaneKind) => void;
+}) {
+  const label = `${slot} pane view`;
+  return (
+    <Select
+      value={value}
+      onChange={(e) => onChange(e.target.value as SplitPaneKind)}
+      title={label}
+      aria-label={label}
+      // Sized and weighted like the `PanelTitle` it stands in for, so the header
+      // still reads as a row of pane names rather than a row of form controls.
+      className="mr-auto h-8 w-auto shrink-0 border-transparent bg-transparent px-1 text-sm font-medium shadow-none hover:border-input"
+    >
+      {SPLIT_PANE_KINDS.map((k) => (
+        <option key={k} value={k}>
+          {PANE_LABELS[k]}
+        </option>
+      ))}
+    </Select>
   );
 }
 
@@ -375,6 +447,7 @@ function paneProps(kind: EditorKind, csIndex: number, settings?: EditorSettings)
 
 export function EditorPane({
   title,
+  titleControl,
   kind,
   csIndex,
   units,
@@ -401,6 +474,8 @@ export function EditorPane({
   settings,
 }: {
   title: string;
+  /** Replaces the pane heading — the split layout puts its pane picker here. */
+  titleControl?: React.ReactNode;
   kind: EditorKind;
   csIndex: number;
   units: LengthUnit;
@@ -451,9 +526,11 @@ export function EditorPane({
         scrolls sideways rather than either of them adding a row.
       */}
       <ViewPaneHeader className="gap-2">
-        <ViewToggleTitle className="mr-auto min-w-0 truncate" onDoubleClick={onTitleDoubleClick}>
-          {title}
-        </ViewToggleTitle>
+        {titleControl ?? (
+          <ViewToggleTitle className="mr-auto min-w-0 truncate" onDoubleClick={onTitleDoubleClick}>
+            {title}
+          </ViewToggleTitle>
+        )}
         <SelectedPointEditor
           store={boardStore}
           units={units}

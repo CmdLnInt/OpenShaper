@@ -31,10 +31,10 @@ export default function DocsOverview() {
         <Terms>
           <Term name="The panes">
             Four views of the same board — outline, rocker, cross-section and 3D. The quad view
-            shows all four at once; keys <code>1</code>–<code>5</code> switch between them. On
-            phones the quad view is not offered — four panes in a phone's width leaves none of them
-            usable — so the editor opens on the outline and keys <code>2</code>–<code>5</code>{' '}
-            switch.
+            shows all four at once, and the split view (<code>6</code>, desktop only) stacks any two
+            of them full width; keys <code>1</code>–<code>6</code> switch between them. On phones
+            the quad view is not offered — four panes in a phone's width leaves none of them usable
+            — so the editor opens on the outline and keys <code>2</code>–<code>5</code> switch.
           </Term>
           <Term name="The sidebar">
             Live specs, resize, board details, fins, weight estimate, trace images and the overlay

@@ -55,6 +55,10 @@ export const VIEW_KEYS: readonly { key: string; view: View; label: string; tabLa
   { key: '3', view: 'rocker', label: 'Rocker view', tabLabel: 'Rocker' },
   { key: '4', view: 'crossSection', label: 'Cross-section view', tabLabel: 'Cross-section' },
   { key: '5', view: '3d', label: '3D view', tabLabel: '3D' },
+  // Appended rather than slotted in beside Quad: this list orders the tab strip
+  // *and* numbers the keys, so giving Split the place its kinship with Quad
+  // suggests would renumber four bindings people already have in their hands.
+  { key: '6', view: 'split', label: 'Split view', tabLabel: 'Split' },
 ];
 
 export const SHORTCUTS: readonly Shortcut[] = [

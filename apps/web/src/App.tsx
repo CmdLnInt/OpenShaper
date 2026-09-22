@@ -77,7 +77,7 @@ import {
 } from './format';
 import { openHtmlInNewTab, specSheetHtmlFor } from './spec-sheet-open';
 import { loadSession, saveSession } from './session-store';
-import { loadViewState, saveViewState } from './view-state';
+import { DEFAULT_SPLIT, loadViewState, saveViewState, type SplitPanes } from './view-state';
 import { Brandmark } from './components/marks';
 import { CommandPalette, commandsFromMenus } from './CommandPalette';
 import { ConstructionPanel } from './ConstructionPanel';
@@ -107,11 +107,13 @@ import {
   faceSizeFor,
   FALLBACK_VIEW,
   isViewAvailable,
+  SplitPaneSelect,
   ThreeDControls,
   UnitSelect,
   ViewPaneHeader,
   ViewToggleTitle,
   type EditorKind,
+  type SplitPaneKind,
   type View,
   type View3DSettings,
 } from './view-toolkit';
@@ -303,6 +305,27 @@ function AppShell() {
     liveViewState.current = { ...liveViewState.current, view: pickedView };
     scheduleViewSave();
   }, [pickedView, scheduleViewSave]);
+  // Which pane each half of the split layout shows. Persisted alongside the
+  // active view, so a pairing set up once survives a reload and a trip through
+  // the other views.
+  const [split, setSplit] = useState<SplitPanes>(bootViewState.current.split ?? DEFAULT_SPLIT);
+  useEffect(() => {
+    liveViewState.current = { ...liveViewState.current, split };
+    scheduleViewSave();
+  }, [split, scheduleViewSave]);
+  /**
+   * Point one half at a pane. Picking the pane the *other* half already shows
+   * swaps the two rather than doubling it up: two copies of the outline is never
+   * what the pick meant, and swapping is the one reading that keeps both choices.
+   */
+  const setSplitPane = useCallback(
+    (slot: 'top' | 'bottom', kind: SplitPaneKind) =>
+      setSplit((s) => {
+        if (kind === (slot === 'top' ? s.bottom : s.top)) return { top: s.bottom, bottom: s.top };
+        return slot === 'top' ? { ...s, top: kind } : { ...s, bottom: kind };
+      }),
+    [],
+  );
   /** Per-pane framing report: consume the pending restore, persist the live value. */
   const reportPaneView = (kind: EditorKind) => (v: { cx: number; cy: number; scale: number }) => {
     delete pendingViews2d.current[kind];
@@ -322,8 +345,9 @@ function AppShell() {
   const isDesktop = useIsDesktop();
   const isPhone = useIsPhone();
   const isShort = useIsShortViewport();
-  const view = isViewAvailable(pickedView, isPhone) ? pickedView : FALLBACK_VIEW;
-  const views = VIEW_KEYS.filter((v) => isViewAvailable(v.view, isPhone));
+  const tier = { isPhone, isDesktop };
+  const view = isViewAvailable(pickedView, tier) ? pickedView : FALLBACK_VIEW;
+  const views = VIEW_KEYS.filter((v) => isViewAvailable(v.view, tier));
 
   // Which editors get used is invisible to autocapture — the panes are
   // canvases. Recorded once per session per view (markView dedupes) so the
@@ -333,11 +357,11 @@ function AppShell() {
   // through it, so a view this tier does not offer cannot be reached by either.
   const selectView = useCallback(
     (v: View) => {
-      if (!isViewAvailable(v, isPhone)) return;
+      if (!isViewAvailable(v, { isPhone, isDesktop })) return;
       setPickedView(v);
       markView(v);
     },
-    [isPhone],
+    [isPhone, isDesktop],
   );
 
   // A short viewport (a phone held landscape) starts with the sheet out of the
@@ -1195,103 +1219,86 @@ function AppShell() {
       : []),
   ];
 
-  // The four quad panes, built once and arranged either as a 2×2 grid (desktop) or a
-  // vertical scrolling stack (compact) — the panes themselves are identical in both.
-  // Only built for the view that uses them: the phone tier never offers quad, and
-  // this array carries the lazy 3D panel.
+  /**
+   * One pane of a multi-pane layout. Quad and Split show the same panes with the
+   * same wiring — the layout decides only how many there are and, through
+   * `titleControl`, whether the heading names the pane or picks it.
+   */
+  const layoutPane = (kind: SplitPaneKind, titleControl?: React.ReactNode) => {
+    if (kind === '3d')
+      return (
+        <Panel key="3d" className="flex min-h-0 flex-col">
+          <ViewPaneHeader className="flex items-center justify-between gap-2">
+            {titleControl ?? (
+              <ViewToggleTitle onDoubleClick={() => selectView('3d')}>3D</ViewToggleTitle>
+            )}
+            <ThreeDControls settings={view3d} onChange={patchView3d} compact />
+          </ViewPaneHeader>
+          <PanelBody className="min-h-0 flex-1 p-0">
+            <ThreeDPane
+              store={boardStore}
+              mode={view3d.mode}
+              lighting={view3d.lighting}
+              material={view3d.material}
+              color={view3d.color}
+              finColor={settings.finColor}
+              viewCubeLineColor={settings.outlineColor}
+              analysis={view3d.analysis}
+              targetFaceSize={faceSizeFor(view3d.meshQuality)}
+              showStringer={view3d.showStringer}
+              showSections={view3d.showSections}
+              activeSectionX={activeSectionX}
+              key={cameraEpoch}
+              initialCamera={liveViewState.current.camera3d}
+              onCameraChange={onCameraChange}
+            />
+          </PanelBody>
+        </Panel>
+      );
+    return (
+      <EditorPane
+        key={kind}
+        title={
+          kind === 'outline' ? 'Outline' : kind === 'rocker' ? 'Rocker (deck + bottom)' : csTitle
+        }
+        titleControl={titleControl}
+        kind={kind}
+        csIndex={clampedCs}
+        units={units}
+        // The cross-section pane has no length axis, so `EditorPane` drops the
+        // station markers, the scrub and the trace props for it — passing them
+        // uniformly here keeps that one decision in one place.
+        sectionMarkers={sectionMarkers}
+        onPickSection={setCsIndex}
+        focusedSection={focusedSection}
+        onFocusSection={focusSection}
+        onMoveSection={moveSection}
+        onDeleteSection={deleteSectionAt}
+        onAddSectionAt={addSectionAt}
+        onScrub={scrubSection}
+        overlays={overlaysFor(kind)}
+        ghostSplines={ghostSplinesFor(kind)}
+        {...(kind === 'crossSection' ? {} : traceProps(kind))}
+        headerActions={kind === 'crossSection' ? csControls : undefined}
+        settings={settings}
+        viewCommand={viewCmd}
+        initialView={pendingViews2d.current[kind]}
+        onViewChange={reportPaneView(kind)}
+        // In Split the heading is the pane picker, so there is no title left to
+        // double-click — and no single sensible target for it either.
+        onTitleDoubleClick={titleControl ? undefined : () => selectView(kind)}
+      />
+    );
+  };
+
+  // The four quad panes, arranged either as a 2×2 grid (desktop) or a vertical
+  // scrolling stack (compact) — the panes themselves are identical in both. Only
+  // built for the view that uses them: the phone tier never offers quad, and this
+  // array carries the lazy 3D panel.
   const quadPanes =
     view !== 'quad'
       ? []
-      : [
-          <EditorPane
-            key="outline"
-            title="Outline"
-            kind="outline"
-            csIndex={clampedCs}
-            units={units}
-            sectionMarkers={sectionMarkers}
-            onPickSection={setCsIndex}
-            focusedSection={focusedSection}
-            onFocusSection={focusSection}
-            onMoveSection={moveSection}
-            onDeleteSection={deleteSectionAt}
-            onAddSectionAt={addSectionAt}
-            onScrub={scrubSection}
-            overlays={overlaysFor('outline')}
-            ghostSplines={ghostSplinesFor('outline')}
-            {...traceProps('outline')}
-            settings={settings}
-            viewCommand={viewCmd}
-            initialView={pendingViews2d.current.outline}
-            onViewChange={reportPaneView('outline')}
-            onTitleDoubleClick={() => selectView('outline')}
-          />,
-          <EditorPane
-            key="crossSection"
-            title={csTitle}
-            kind="crossSection"
-            csIndex={clampedCs}
-            units={units}
-            focusedSection={focusedSection}
-            onFocusSection={focusSection}
-            overlays={overlaysFor('crossSection')}
-            ghostSplines={ghostSplinesFor('crossSection')}
-            viewCommand={viewCmd}
-            headerActions={csControls}
-            settings={settings}
-            initialView={pendingViews2d.current.crossSection}
-            onViewChange={reportPaneView('crossSection')}
-            onTitleDoubleClick={() => selectView('crossSection')}
-          />,
-          <EditorPane
-            key="rocker"
-            title="Rocker (deck + bottom)"
-            kind="rocker"
-            csIndex={clampedCs}
-            units={units}
-            sectionMarkers={sectionMarkers}
-            onPickSection={setCsIndex}
-            focusedSection={focusedSection}
-            onFocusSection={focusSection}
-            onMoveSection={moveSection}
-            onDeleteSection={deleteSectionAt}
-            onAddSectionAt={addSectionAt}
-            onScrub={scrubSection}
-            overlays={overlaysFor('rocker')}
-            ghostSplines={ghostSplinesFor('rocker')}
-            {...traceProps('rocker')}
-            settings={settings}
-            viewCommand={viewCmd}
-            initialView={pendingViews2d.current.rocker}
-            onViewChange={reportPaneView('rocker')}
-            onTitleDoubleClick={() => selectView('rocker')}
-          />,
-          <Panel key="3d" className="flex min-h-0 flex-col">
-            <ViewPaneHeader className="flex items-center justify-between gap-2">
-              <ViewToggleTitle onDoubleClick={() => selectView('3d')}>3D</ViewToggleTitle>
-              <ThreeDControls settings={view3d} onChange={patchView3d} compact />
-            </ViewPaneHeader>
-            <PanelBody className="min-h-0 flex-1 p-0">
-              <ThreeDPane
-                store={boardStore}
-                mode={view3d.mode}
-                lighting={view3d.lighting}
-                material={view3d.material}
-                color={view3d.color}
-                finColor={settings.finColor}
-                viewCubeLineColor={settings.outlineColor}
-                analysis={view3d.analysis}
-                targetFaceSize={faceSizeFor(view3d.meshQuality)}
-                showStringer={view3d.showStringer}
-                showSections={view3d.showSections}
-                activeSectionX={activeSectionX}
-                key={cameraEpoch}
-                initialCamera={liveViewState.current.camera3d}
-                onCameraChange={onCameraChange}
-              />
-            </PanelBody>
-          </Panel>,
-        ];
+      : (['outline', 'crossSection', 'rocker', '3d'] as const).map((kind) => layoutPane(kind));
 
   const sidebarEl = (
     <Sidebar
@@ -1495,6 +1502,29 @@ function AppShell() {
                 ))}
               </div>
             )
+          ) : view === 'split' ? (
+            // Two full-width panes, one above the other. Both halves keep the
+            // board's length axis running the same way across the window, which
+            // is the whole point of stacking rather than sitting side by side:
+            // outline over rocker reads as one drawing.
+            <div className="grid h-full grid-rows-2 gap-3">
+              {layoutPane(
+                split.top,
+                <SplitPaneSelect
+                  slot="Top"
+                  value={split.top}
+                  onChange={(k) => setSplitPane('top', k)}
+                />,
+              )}
+              {layoutPane(
+                split.bottom,
+                <SplitPaneSelect
+                  slot="Bottom"
+                  value={split.bottom}
+                  onChange={(k) => setSplitPane('bottom', k)}
+                />,
+              )}
+            </div>
           ) : view === '3d' ? (
             <Panel className="flex h-full flex-col">
               <ViewPaneHeader className="flex items-center justify-between gap-3">

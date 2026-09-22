@@ -46,6 +46,15 @@ export default function DocsEditing() {
           between the single views instead.
         </p>
         <p>
+          <strong>Split view</strong> is the middle ground: two full-width panes, one above the
+          other, each with a picker where its title would be — so you can put the outline over the
+          rocker, or the outline over a cross-section, and read both at full window width. Picking
+          the pane the other half is already showing swaps the two rather than doubling it up. The
+          pairing is remembered between sessions. Split is a desktop layout only: halving the height
+          of a tablet or phone window leaves two panes too short to work in, so the tab and its
+          number key are not offered below 1024px wide.
+        </p>
+        <p>
           With a mouse there is a shortcut that skips the tabs:{' '}
           <strong>double-click a pane title</strong> in the quad view to blow that pane up to the
           full viewport, and double-click the title again to drop back to quad. The controls in the

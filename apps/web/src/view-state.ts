@@ -9,7 +9,7 @@
  * not as the pixel-anchored Viewport, so restoring into a different window or
  * pane size re-centers correctly.
  */
-import type { EditorKind, View } from './view-toolkit';
+import { SPLIT_PANE_KINDS, type EditorKind, type SplitPaneKind, type View } from './view-toolkit';
 import {
   ANALYSIS_3D,
   DEFAULT_VIEW_3D,
@@ -38,16 +38,35 @@ export interface Camera3D {
   target: [number, number, number];
 }
 
+/** Which pane each half of the split layout is showing. */
+export interface SplitPanes {
+  top: SplitPaneKind;
+  bottom: SplitPaneKind;
+}
+
 export interface ViewState {
   version: number;
-  /** Active view/tab (quad, one of the editors, or 3d). */
+  /** Active view/tab (quad, split, one of the editors, or 3d). */
   view: View;
   /** Per-pane 2D framing; a missing entry means "auto-fit as usual". */
   views2d: Partial<Record<EditorKind, View2D>>;
   camera3d?: Camera3D;
   /** 3D appearance + analysis settings; absent on blobs written before they were saved. */
   view3d?: View3DSettings;
+  /**
+   * The split layout's two pane choices. Remembered whether or not split is the
+   * active view, so returning to it restores the pairing that was set up rather
+   * than the default one.
+   */
+  split?: SplitPanes;
 }
+
+/**
+ * Outline over rocker: the pairing a shaper reads together — the plan shape and
+ * the profile of the same board, sharing a length axis down the middle of the
+ * window.
+ */
+export const DEFAULT_SPLIT: SplitPanes = { top: 'outline', bottom: 'rocker' };
 
 export const DEFAULT_VIEW_STATE: ViewState = {
   version: VIEW_STATE_VERSION,
@@ -55,7 +74,7 @@ export const DEFAULT_VIEW_STATE: ViewState = {
   views2d: {},
 };
 
-const VIEWS: readonly View[] = ['quad', 'outline', 'rocker', 'crossSection', '3d'];
+const VIEWS: readonly View[] = ['quad', 'split', 'outline', 'rocker', 'crossSection', '3d'];
 const KINDS: readonly EditorKind[] = ['outline', 'rocker', 'crossSection'];
 
 const isFiniteNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -69,6 +88,22 @@ const sanitizeView2D = (v: unknown): View2D | undefined => {
 
 const isVec3 = (v: unknown): v is [number, number, number] =>
   Array.isArray(v) && v.length === 3 && v.every(isFiniteNum);
+
+/**
+ * A split pairing is kept only when both halves name a real pane and name
+ * different ones — the app never produces a doubled-up split (picking the other
+ * half's pane swaps them), and the two halves being distinct is what lets the
+ * layout key its panes by pane kind. A blob failing either test falls back
+ * whole rather than being patched a half at a time, so what comes back is a
+ * pairing someone actually chose.
+ */
+const sanitizeSplit = (v: unknown): SplitPanes | undefined => {
+  const o = v as Partial<SplitPanes> | null;
+  const ok = (k: unknown): k is SplitPaneKind => SPLIT_PANE_KINDS.includes(k as SplitPaneKind);
+  return o && ok(o.top) && ok(o.bottom) && o.top !== o.bottom
+    ? { top: o.top, bottom: o.bottom }
+    : undefined;
+};
 
 const sanitizeCamera = (v: unknown): Camera3D | undefined => {
   const o = v as Partial<Camera3D> | null;
@@ -122,12 +157,14 @@ export function loadViewState(): ViewState {
     }
     const camera3d = sanitizeCamera(parsed.camera3d);
     const view3d = sanitizeView3D(parsed.view3d);
+    const split = sanitizeSplit(parsed.split);
     return {
       version: VIEW_STATE_VERSION,
       view: VIEWS.includes(parsed.view as View) ? (parsed.view as View) : DEFAULT_VIEW_STATE.view,
       views2d,
       ...(camera3d ? { camera3d } : {}),
       ...(view3d ? { view3d } : {}),
+      ...(split ? { split } : {}),
     };
   } catch {
     return DEFAULT_VIEW_STATE;
