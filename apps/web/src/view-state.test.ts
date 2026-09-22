@@ -5,6 +5,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DEFAULT_SPLIT,
   DEFAULT_VIEW_STATE,
   loadViewState,
   saveViewState,
@@ -243,5 +244,49 @@ describe('sidebar persistence', () => {
       sidebar: { ...DEFAULT_SIDEBAR_STATE, open: [], touched: [] },
     });
     expect(loadViewState().sidebar!.open).toEqual([]);
+  });
+});
+
+describe('split persistence', () => {
+  it('round-trips a split pairing', () => {
+    const s: ViewState = {
+      ...DEFAULT_VIEW_STATE,
+      view: 'split',
+      split: { top: 'crossSection', bottom: '3d' },
+    };
+    saveViewState(s);
+    const loaded = loadViewState();
+    expect(loaded.view).toBe('split');
+    expect(loaded.split).toEqual(s.split);
+  });
+
+  it('omits split entirely when the stored blob has none', () => {
+    saveViewState(DEFAULT_VIEW_STATE);
+    expect(loadViewState().split).toBeUndefined();
+  });
+
+  it('drops a pairing naming a pane that does not exist', () => {
+    saveViewState({ ...DEFAULT_VIEW_STATE, split: DEFAULT_SPLIT });
+    const raw = JSON.parse(localStorage.getItem('bs.viewState')!);
+    raw.split.bottom = 'hologram';
+    localStorage.setItem('bs.viewState', JSON.stringify(raw));
+    expect(loadViewState().split).toBeUndefined();
+  });
+
+  it('drops a pairing with the same pane in both halves', () => {
+    // The app can't produce one — picking the other half's pane swaps them — so a
+    // doubled-up blob has been tampered with, and the layout keys its panes by kind.
+    saveViewState({ ...DEFAULT_VIEW_STATE, split: { top: 'rocker', bottom: 'rocker' } });
+    expect(loadViewState().split).toBeUndefined();
+  });
+
+  it('still restores an older blob written before split existed', () => {
+    localStorage.setItem(
+      'bs.viewState',
+      JSON.stringify({ version: 1, view: 'rocker', views2d: {} }),
+    );
+    const v = loadViewState();
+    expect(v.view).toBe('rocker');
+    expect(v.split).toBeUndefined();
   });
 });

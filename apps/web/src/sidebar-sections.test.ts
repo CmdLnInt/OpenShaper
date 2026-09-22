@@ -92,13 +92,13 @@ describe('applyViewChange', () => {
   });
 
   it('leaves an always-relevant section open in every view', () => {
-    for (const view of ['quad', 'outline', 'rocker', 'crossSection', '3d'] as const) {
+    for (const view of ['quad', 'split', 'outline', 'rocker', 'crossSection', '3d'] as const) {
       expect(applyViewChange(state(), view).open, view).toContain('specs');
     }
   });
 
   it('never auto-opens a section marked as reference material', () => {
-    for (const view of ['quad', 'outline', 'rocker', 'crossSection', '3d'] as const) {
+    for (const view of ['quad', 'split', 'outline', 'rocker', 'crossSection', '3d'] as const) {
       expect(applyViewChange(state(), view).open, view).not.toContain('history');
     }
   });
@@ -286,5 +286,42 @@ describe('the spec readout bands', () => {
   it('leaves the section accordion alone', () => {
     const s = state();
     expect(toggleSpecGroup(s, 'tail', true).open).toEqual(s.open);
+  });
+});
+
+/**
+ * Split shows two panes at once, so the sidebar follows the panes rather than the
+ * layout: a tool is relevant there whenever *either* half is a view that wants it.
+ */
+describe('applyViewChange across a split', () => {
+  it('opens what either half asks for', () => {
+    // Trace belongs to outline/rocker; fins to 3D. One half of each, both open.
+    const open = applyViewChange(state(), ['outline', '3d']).open;
+    expect(open).toContain('trace');
+    expect(open).toContain('fins');
+  });
+
+  it('closes what neither half asks for', () => {
+    const open = applyViewChange(state(), ['crossSection', '3d']).open;
+    expect(open, 'neither half can hold a trace').not.toContain('trace');
+  });
+
+  it('re-points with the halves — swapping 3D out closes Fins again', () => {
+    const with3d = applyViewChange(state(), ['outline', '3d']);
+    expect(with3d.open).toContain('fins');
+    expect(applyViewChange(with3d, ['outline', 'rocker']).open).not.toContain('fins');
+  });
+
+  it('still honours a hand-opened section', () => {
+    const s = toggleSection(state(), 'fins', true);
+    expect(applyViewChange(s, ['outline', 'rocker']).open).toContain('fins');
+  });
+
+  it('matches the single view when both halves name the same one', () => {
+    // Not a state the app can reach — the picker swaps instead of doubling up —
+    // but it pins the "any half counts" rule to the one-view behaviour.
+    expect(applyViewChange(state(), ['outline', 'outline']).open).toEqual(
+      applyViewChange(state(), 'outline').open,
+    );
   });
 });

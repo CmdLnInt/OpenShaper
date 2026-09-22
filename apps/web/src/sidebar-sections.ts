@@ -232,23 +232,30 @@ export const DEFAULT_SIDEBAR_STATE: SidebarState = {
   specGroups: ['overall'],
 };
 
-function isRelevant(section: SidebarSection, view: View): boolean {
-  return section.relevantTo === 'all' || section.relevantTo.includes(view);
+function isRelevant(section: SidebarSection, views: readonly View[]): boolean {
+  return section.relevantTo === 'all' || views.some((v) => section.relevantTo.includes(v));
 }
 
 /**
  * Re-open the sections the new view implies and close the ones it does not —
  * skipping anything the user has touched.
  *
+ * Takes the views actually on screen, not the tab that was clicked: the split
+ * layout shows two panes at once, and a section is relevant there whenever
+ * *either* half makes it so. Passing one view is the ordinary case; `quad` names
+ * itself, because what it implies is a property of the layout rather than of the
+ * four panes inside it.
+ *
  * Deliberately never *removes* a section: every tool stays present and one click
  * away in every view, so switching view can never be the reason a control cannot be
  * found. It only changes what starts expanded.
  */
-export function applyViewChange(state: SidebarState, view: View): SidebarState {
+export function applyViewChange(state: SidebarState, view: View | readonly View[]): SidebarState {
+  const views = typeof view === 'string' ? [view] : view;
   const touched = new Set(state.touched);
   const wasOpen = new Set(state.open);
   const open = SIDEBAR_SECTIONS.filter((s) =>
-    touched.has(s.id) ? wasOpen.has(s.id) : isRelevant(s, view),
+    touched.has(s.id) ? wasOpen.has(s.id) : isRelevant(s, views),
   ).map((s) => s.id);
   // Identity matters: the shell runs this on every view change including the first
   // render, and a fresh object there would re-render and re-persist for nothing.

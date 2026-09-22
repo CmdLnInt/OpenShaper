@@ -101,6 +101,7 @@ export const DOC_ENTRIES: readonly DocEntry[] = [
     'view-3',
     'view-4',
     'view-5',
+    'view-6',
   ]),
 ];
 
