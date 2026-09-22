@@ -37,8 +37,26 @@ export default function DocsOverview() {
             switch.
           </Term>
           <Term name="The sidebar">
-            Live specs, resize, board details, fins, weight estimate, trace images and the overlay
-            toggles. On narrow screens it becomes a bottom sheet.
+            Four tabs down its edge — Specs, Shape, Build and Reference — so the tool list is always
+            readable and never pushed off-screen by whatever you have open. Specs is the live
+            readout; Shape holds resize, the control-point inspector and the overlay toggles; Build
+            holds board details, fins and the weight estimate; Reference holds trace images, history
+            and the ghost comparison. Inside a tab each tool is a section you open by clicking its
+            header, and a shut section still shows a summary, so you can read a tab without opening
+            anything.
+          </Term>
+          <Term name="Pinning a tab">
+            The pin in a panel&apos;s header keeps that panel on screen while you work in another
+            tab — Specs pinned above Shape, say, so the numbers stay visible while you edit. One tab
+            can be pinned at a time. The double-chevron beside it opens or shuts every section in
+            the panel at once, and the chevron after that folds the panel away entirely, leaving the
+            tab strip and the headline dimensions. Clicking any tab brings it back.
+          </Term>
+          <Term name="Tools that follow the view">
+            Changing view opens the sections that view is for and shuts the ones it is not — trace
+            controls in the outline and rocker, fins in 3D. It never switches tabs and never hides a
+            tool: once you open or close a section yourself, it stays as you left it. On narrow
+            screens the sidebar becomes a bottom sheet with the tabs laid out as a row.
           </Term>
           <Term name="The menu bar">
             File, Export, Edit, View, Board and Help. On phones this collapses into a single button

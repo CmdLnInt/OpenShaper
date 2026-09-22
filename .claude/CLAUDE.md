@@ -120,6 +120,12 @@ CI runs `pnpm typecheck`, `pnpm test`, and `pnpm build` after
 - Do not claim a check passed unless it was run. Report blocked checks and their
   cause explicitly.
 
+The editor sidebar is the one piece of UI with enough moving parts to be worth a map:
+its tabs, which tool sits in which tab, per-view relevance and every tunable dimension
+are data in `apps/web/src/sidebar-sections.ts` and `SIZING` in `Sidebar.tsx`, not
+scattered through JSX. See `docs/design/sidebar.md` for a "want to change X, edit Y"
+table before nudging it.
+
 See `apps/web/CLAUDE.md` for the display-units convention (loads automatically when
 working under `apps/web`).
 

@@ -91,6 +91,7 @@ import { CrossSectionControls } from './CrossSectionControls';
 import { LandscapeHint } from './LandscapeHint';
 import { CoffeeIcon } from './components/Support';
 import { Sidebar, type OverlayToggles, type ResizeFields } from './Sidebar';
+import { applyViewChange, DEFAULT_SIDEBAR_STATE, type SidebarState } from './sidebar-sections';
 import sampleBrd from './sample-board.brd?raw';
 import { boardStore } from './store';
 import { SUPPORT_URL } from './support';
@@ -294,6 +295,12 @@ function AppShell() {
   // phone renders Outline over a stored `quad` without destroying that preference —
   // widen the window and quad comes straight back.
   const [pickedView, setPickedView] = useState<View>(bootViewState.current.view);
+  // Sidebar shape (rail folded, which sections are open, which the user owns). Lives
+  // beside `pickedView` because the two are coupled: changing view re-opens the
+  // sections that view implies, for every section the user has not taken over.
+  const [sidebar, setSidebar] = useState<SidebarState>(
+    () => bootViewState.current.sidebar ?? DEFAULT_SIDEBAR_STATE,
+  );
   const viewSaveTimer = useRef<number>();
   const scheduleViewSave = useCallback(() => {
     window.clearTimeout(viewSaveTimer.current);
@@ -303,6 +310,10 @@ function AppShell() {
     liveViewState.current = { ...liveViewState.current, view: pickedView };
     scheduleViewSave();
   }, [pickedView, scheduleViewSave]);
+  useEffect(() => {
+    liveViewState.current = { ...liveViewState.current, sidebar };
+    scheduleViewSave();
+  }, [sidebar, scheduleViewSave]);
   /** Per-pane framing report: consume the pending restore, persist the live value. */
   const reportPaneView = (kind: EditorKind) => (v: { cx: number; cy: number; scale: number }) => {
     delete pendingViews2d.current[kind];
@@ -324,6 +335,15 @@ function AppShell() {
   const isShort = useIsShortViewport();
   const view = isViewAvailable(pickedView, isPhone) ? pickedView : FALLBACK_VIEW;
   const views = VIEW_KEYS.filter((v) => isViewAvailable(v.view, isPhone));
+
+  // Switching view re-opens the sections that view is for and shuts the ones it is
+  // not — but only for sections the user has never toggled themselves (`touched`).
+  // Keyed on the *derived* view, so a phone falling back off `quad` gets the sections
+  // for what it is actually showing. `applyViewChange` returns the same object when
+  // nothing moves, so the first render does not re-persist what it just restored.
+  useEffect(() => {
+    setSidebar((s) => applyViewChange(s, view));
+  }, [view]);
 
   // Which editors get used is invisible to autocapture — the panes are
   // canvases. Recorded once per session per view (markView dedupes) so the
@@ -1293,11 +1313,13 @@ function AppShell() {
           </Panel>,
         ];
 
-  const sidebarEl = (
+  // Built per mount: only the desktop one offers the fold-to-rail control, since the
+  // sheet's snap points already are its collapse.
+  const sidebarFor = (collapsible: boolean) => (
     <Sidebar
+      collapsible={collapsible}
       specs={specs}
       units={units}
-      interpolationType={board?.interpolationType ?? 'controlPoint'}
       resize={resize}
       setResize={setResize}
       applyResize={applyResize}
@@ -1312,6 +1334,8 @@ function AppShell() {
       setOverlayToggles={setOverlayToggles}
       ghost={!!ghost}
       ghostSpecs={ghostSpecs}
+      sidebar={sidebar}
+      onSidebarChange={setSidebar}
       onUnitChange={isPhone ? setUnitKey : undefined}
     />
   );
@@ -1433,17 +1457,22 @@ function AppShell() {
               where the current unit stays visible next to the dimensions it
               formats. See `UnitSelect`. */}
           {!isPhone && <UnitSelect value={unitKey} onChange={setUnitKey} />}
-          {/* Below lg the sidebar lives in a bottom sheet; this opens it. */}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="shrink-0 lg:hidden"
-            title={panelsShowing ? 'Hide board panels' : 'Show board panels'}
-            aria-label={panelsShowing ? 'Hide board panels' : 'Show board panels'}
-            onClick={() => setSheetSnap(panelsShowing ? 'closed' : 'half')}
-          >
-            <SlidersHorizontal className="size-4" />
-          </Button>
+          {/* Below lg the sidebar lives in a bottom sheet; this opens it. Gated on the
+              tier rather than `lg:hidden` so it is not merely invisible on desktop: it
+              names the same action as the rail's own control, and two mounted buttons
+              claiming it is one ambiguity for assistive tech and one for tests. */}
+          {!isDesktop && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="shrink-0"
+              title={panelsShowing ? 'Hide board panels' : 'Show board panels'}
+              aria-label={panelsShowing ? 'Hide board panels' : 'Show board panels'}
+              onClick={() => setSheetSnap(panelsShowing ? 'closed' : 'half')}
+            >
+              <SlidersHorizontal className="size-4" />
+            </Button>
+          )}
         </div>
 
         <LandscapeHint />
@@ -1560,7 +1589,7 @@ function AppShell() {
         </div>
 
         {/* Desktop: sidebar beside the viewport. Compact: it moves into a bottom sheet. */}
-        {isDesktop && sidebarEl}
+        {isDesktop && sidebarFor(true)}
       </div>
 
       {!isDesktop && (
@@ -1570,7 +1599,7 @@ function AppShell() {
           peek={sheetPeek}
           canClose={isPhone}
         >
-          {sidebarEl}
+          {sidebarFor(false)}
         </BottomSheet>
       )}
 

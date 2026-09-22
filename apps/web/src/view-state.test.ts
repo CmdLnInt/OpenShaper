@@ -11,6 +11,7 @@ import {
   VIEW_STATE_VERSION,
   type ViewState,
 } from './view-state';
+import { DEFAULT_SIDEBAR_STATE } from './sidebar-sections';
 import { DEFAULT_VIEW_3D } from './view3d-settings';
 
 beforeEach(() => {
@@ -25,6 +26,14 @@ const sample: ViewState = {
     rocker: { cx: 80, cy: 3.1, scale: 6 },
   },
   camera3d: { position: [0, -250, 110], target: [0, 10, 0] },
+  sidebar: {
+    collapsed: true,
+    activeTab: 'build',
+    pinnedTab: 'specs',
+    open: ['specs', 'trace'],
+    touched: ['trace'],
+    specGroups: ['nose', 'overall'],
+  },
 };
 
 describe('view-state', () => {
@@ -148,5 +157,91 @@ describe('view3d persistence', () => {
     expect(v.views2d.outline).toEqual({ cx: 1, cy: 2, scale: 3 });
     expect(v.camera3d).toEqual({ position: [1, 2, 3], target: [0, 0, 0] });
     expect(v.view3d).toBeUndefined();
+    // Same guarantee, now claimed for the sidebar: a blob written before the
+    // accordion existed keeps its panes and picks up the default sidebar.
+    expect(v.sidebar).toEqual(DEFAULT_SIDEBAR_STATE);
+  });
+});
+
+describe('sidebar persistence', () => {
+  it('round-trips the rail, the open set and the touched set', () => {
+    saveViewState(sample);
+    expect(loadViewState().sidebar).toEqual(sample.sidebar);
+  });
+
+  it('drops section ids it does not recognise, keeping the rest', () => {
+    // A section removed in a later release must not be able to resurrect itself
+    // out of an old blob and reach the renderer.
+    saveViewState(sample);
+    const raw = JSON.parse(localStorage.getItem('bs.viewState')!);
+    raw.sidebar.open = ['specs', 'construction', 'fins'];
+    localStorage.setItem('bs.viewState', JSON.stringify(raw));
+    expect(loadViewState().sidebar!.open).toEqual(['specs', 'fins']);
+  });
+
+  it('re-imposes registry order on a hand-edited blob', () => {
+    saveViewState(sample);
+    const raw = JSON.parse(localStorage.getItem('bs.viewState')!);
+    raw.sidebar.open = ['trace', 'specs', 'resize'];
+    localStorage.setItem('bs.viewState', JSON.stringify(raw));
+    expect(loadViewState().sidebar!.open).toEqual(['specs', 'resize', 'trace']);
+  });
+
+  it('falls back per field rather than rejecting the whole sidebar', () => {
+    saveViewState(sample);
+    const raw = JSON.parse(localStorage.getItem('bs.viewState')!);
+    raw.sidebar.collapsed = 'yes';
+    localStorage.setItem('bs.viewState', JSON.stringify(raw));
+    const s = loadViewState().sidebar!;
+    expect(s.collapsed).toBe(DEFAULT_SIDEBAR_STATE.collapsed);
+    expect(s.open).toEqual(['specs', 'trace']); // the good fields survive
+  });
+
+  it('falls back to defaults when the stored sidebar is not an object', () => {
+    saveViewState(sample);
+    const raw = JSON.parse(localStorage.getItem('bs.viewState')!);
+    raw.sidebar = 'collapsed';
+    localStorage.setItem('bs.viewState', JSON.stringify(raw));
+    expect(loadViewState().sidebar).toEqual(DEFAULT_SIDEBAR_STATE);
+  });
+
+  it('round-trips the active and pinned tabs', () => {
+    saveViewState(sample);
+    const s = loadViewState().sidebar!;
+    expect(s.activeTab).toBe('build');
+    expect(s.pinnedTab).toBe('specs');
+  });
+
+  it('falls back to Specs when the stored tab no longer exists', () => {
+    // A removed tab must not stay selectable: it would render an empty panel beside a
+    // strip with nothing lit.
+    saveViewState(sample);
+    const raw = JSON.parse(localStorage.getItem('bs.viewState')!);
+    raw.sidebar.activeTab = 'construction';
+    raw.sidebar.pinnedTab = 'construction';
+    localStorage.setItem('bs.viewState', JSON.stringify(raw));
+    const s = loadViewState().sidebar!;
+    expect(s.activeTab).toBe(DEFAULT_SIDEBAR_STATE.activeTab);
+    expect(s.pinnedTab).toBeNull();
+    expect(s.open).toEqual(['specs', 'trace']); // the good fields still survive
+  });
+
+  it('round-trips the spec bands and drops ids it does not know', () => {
+    saveViewState(sample);
+    const raw = JSON.parse(localStorage.getItem('bs.viewState')!);
+    raw.sidebar.specGroups = ['overall', 'rail', 'nose'];
+    localStorage.setItem('bs.viewState', JSON.stringify(raw));
+    // Filtered, and back in registry order rather than the order they were written.
+    expect(loadViewState().sidebar!.specGroups).toEqual(['nose', 'overall']);
+  });
+
+  it('keeps an empty open set, which is what collapse-all writes', () => {
+    // `[]` must survive as itself — falling back to the defaults here would
+    // silently re-open three sections on every reload after a collapse-all.
+    saveViewState({
+      ...DEFAULT_VIEW_STATE,
+      sidebar: { ...DEFAULT_SIDEBAR_STATE, open: [], touched: [] },
+    });
+    expect(loadViewState().sidebar!.open).toEqual([]);
   });
 });
